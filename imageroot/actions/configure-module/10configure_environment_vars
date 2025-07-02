@@ -15,3 +15,27 @@ data = json.load(sys.stdin)
 
 #This is specific to you module, so you need to change it accordingly.
 #agent.dump_env()
+MAIN_DB_USERNAME = data.get("MAIN_DB_USERNAME", "root") 
+MESSAGE_DB_HOST = data.get("MESSAGE_DB_HOST", "mariadb") 
+MESSAGE_DB_USERNAME = data.get("MESSAGE_DB_USERNAME", "root") 
+LOGGING_ENABLED = data.get("LOGGING_ENABLED", "false") 
+RAILS_ENVIRONMENT = data.get("RAILS_ENVIRONMENT", "test") 
+WAIT_FOR_TIMEOUT = data.get("WAIT_FOR_TIMEOUT", "90") 
+POSTAL_SIGNING_KEY_PATH = data.get("POSTAL_SIGNING_KEY_PATH", "/config/signing.key") 
+RAILS_LOG_ENABLED = data.get("RAILS_LOG_ENABLED", "false") 
+WAIT_FOR_TARGETS = data.get("WAIT_FOR_TARGETS", "mariadb:3306") 
+MAIN_DB_HOST = data.get("MAIN_DB_HOST", "mariadb") 
+ 
+postal = { 
+ "MAIN_DB_USERNAME" : MAIN_DB_USERNAME ,
+ "MESSAGE_DB_HOST" : MESSAGE_DB_HOST ,
+ "MESSAGE_DB_USERNAME" : MESSAGE_DB_USERNAME ,
+ "LOGGING_ENABLED" : LOGGING_ENABLED ,
+ "RAILS_ENVIRONMENT" : RAILS_ENVIRONMENT ,
+ "WAIT_FOR_TIMEOUT" : WAIT_FOR_TIMEOUT ,
+ "POSTAL_SIGNING_KEY_PATH" : POSTAL_SIGNING_KEY_PATH ,
+ "RAILS_LOG_ENABLED" : RAILS_LOG_ENABLED ,
+ "WAIT_FOR_TARGETS" : WAIT_FOR_TARGETS ,
+ "MAIN_DB_HOST" : MAIN_DB_HOST ,
+} 
+agent.write_envfile("postal.env", postal) 
