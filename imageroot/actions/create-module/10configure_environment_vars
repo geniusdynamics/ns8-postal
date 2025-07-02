@@ -14,7 +14,8 @@ import os
 # If parsing fails, output everything to stderr
 data = json.load(sys.stdin)
 
-#This is specific to you module, so you need to change it accordingly.
+# This is specific to you module, so you need to change it accordingly.
+
 
 def generate_random_password(length):
     # Generate random bytes and convert them to a hexadecimal string
@@ -22,20 +23,35 @@ def generate_random_password(length):
     password = random_bytes.hex()
     return password[:length]
 
-MARIADB_ROOT_PASSWORD= generate_random_password(16)
-MARIADB_DATABASE="postal"
-MARIADB_USER="postal"
-MARIADB_PASSWORD=generate_random_password(16)
-    # mariadb env
+
+MARIADB_ROOT_PASSWORD = generate_random_password(16)
+MARIADB_DATABASE = "postal"
+MARIADB_USER = "postal"
+MARIADB_PASSWORD = generate_random_password(16)
+# mariadb env
 mariadb_config = {
     "MARIADB_ROOT_PASSWORD": MARIADB_ROOT_PASSWORD,
     "MARIADB_DATABASE": MARIADB_DATABASE,
     "MARIADB_USER": MARIADB_USER,
-    "MARIADB_PASSWORD": MARIADB_PASSWORD
+    "MARIADB_PASSWORD": MARIADB_PASSWORD,
 }
+
+MAIN_DB_HOST = data.get("MAIN_DB_HOST", "mariadb-app")
+MESSAGE_DB_HOST = data.get("MESSAGE_DB_HOST", "mariadb-app")
+
+app_db_config = {
+    "MAIN_DB_USERNAME": MARIADB_USER,
+    "MAIN_DB_PASSWORD": MARIADB_ROOT_PASSWORD,
+    "MESSAGE_DB_USERNAME": MARIADB_USER,
+    "MESSAGE_DB_PASSWORD": MARIADB_ROOT_PASSWORD,
+    "MAIN_DB_HOST": MAIN_DB_HOST,
+    "MESSAGE_DB_HOST": MESSAGE_DB_HOST,
+}
+
+agent.write_envfile("app-db.env", app_db_config)
 
 agent.write_envfile("database.env", mariadb_config)
 
 
 # just before starting systemd unit
-#agent.dump_env()
+# agent.dump_env()
