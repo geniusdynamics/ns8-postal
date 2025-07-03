@@ -18,7 +18,7 @@ TimeoutStopSec=70
 ExecStartPre=/bin/mkdir -p tmp
 ExecStartPre=/bin/rm -f %t/mariadb-app.pid %t/mariadb-app.ctr-id
 ExecStartPre=-runagent discover-smarthost
-ExecStart=/usr/bin/podman run --conmon-pidfile %t/mariadb-app.pid  --cidfile %t/mariadb-app.ctr-id --cgroups=no-conmon  --pod-id-file %t/postal.pod-id --replace -d --name  mariadb-app     --env database.env  ${MARIADB_IMAGE}  
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/mariadb-app.pid  --cidfile %t/mariadb-app.ctr-id --cgroups=no-conmon  --pod-id-file %t/postal.pod-id --replace -d --name  mariadb-app  --env database.env  ${MARIADB_IMAGE}  
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/mariadb-app.ctr-id -t 10
 ExecReload=/usr/bin/podman kill -s HUP mariadb-app
 SyslogIdentifier=%u
