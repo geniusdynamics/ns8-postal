@@ -1,0 +1,30 @@
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+[Unit]
+Description=Podman  postal-smtp-app.service
+BindsTo=postal.service
+After=postal.service mariadb-app.service
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=%S/state/environment
+EnvironmentFile=-%S/state/smarthost.env
+WorkingDirectory=%S/state
+Restart=always
+TimeoutStopSec=70
+ExecStartPre=/bin/mkdir -p tmp
+ExecStartPre=/bin/rm -f %t/postal-smtp-app.pid %t/postal-smtp-app.ctr-id
+ExecStartPre=-runagent discover-smarthost
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/postal-smtp-app.pid  --cidfile %t/postal-smtp-app.ctr-id --cgroups=no-conmon  --pod-id-file %t/postal.pod-id --replace -d --name  postal-smtp-app  --volume ci-config:/config   --env-file postal.env --env-file app-db.env  ${POSTAL_IMAGE} postal smtp-server 
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/postal-smtp-app.ctr-id -t 10
+ExecReload=/usr/bin/podman kill -s HUP postal-smtp-app
+SyslogIdentifier=%u
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/postal-smtp-app.ctr-id
+PIDFile=%t/postal-smtp-app.pid
+Type=forking
+
+[Install]
+WantedBy=default.target
