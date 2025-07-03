@@ -49,6 +49,16 @@ You can retrieve the configuration with
 api-cli run get-configuration --agent module/postal1
 ```
 
+## Update
+
+```bash
+api-cli run update-module --data '{
+"module_url": "ghcr.io/geniusdynamics/postal:latest",
+"instances": ["postal1"],
+"force": true
+}'
+```
+
 ## Uninstall
 
 To uninstall the instance:
