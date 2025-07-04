@@ -6,7 +6,7 @@
 [Unit]
 Description=Podman  postal-initializer-app.service
 BindsTo=postal.service
-After=postal.service
+After=postal.service mariadb-app.service
 
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n
@@ -18,7 +18,7 @@ TimeoutStopSec=70
 ExecStartPre=/bin/mkdir -p tmp
 ExecStartPre=/bin/rm -f %t/postal-initializer-app.pid %t/postal-initializer-app.ctr-id
 ExecStartPre=-runagent discover-smarthost
-ExecStart=/usr/bin/podman run --conmon-pidfile %t/postal-initializer-app.pid  --cidfile %t/postal-initializer-app.ctr-id --cgroups=no-conmon  --pod-id-file %t/postal.pod-id --replace -d --name  postal-initializer-app  --env-file database.env  ${postal-initializer_IMAGE}  
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/postal-initializer-app.pid  --cidfile %t/postal-initializer-app.ctr-id --cgroups=no-conmon  --pod-id-file %t/postal.pod-id --replace -d --name  postal-initializer-app --volume %S/bin/initialize-postal:/initialize-postal:Z --volume %S/bin/postal.yaml:/postal.yaml:Z  --env-file database.env --env-file postal.env --env-file rabbitmq.env --env-file app-db.env   ${POSTAL_IMAGE}  /bin/bash -c "/initialize-postal"
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/postal-initializer-app.ctr-id -t 10
 ExecReload=/usr/bin/podman kill -s HUP postal-initializer-app
 SyslogIdentifier=%u
