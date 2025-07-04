@@ -36,6 +36,8 @@ POSTAL_SIGNING_KEY_PATH="${POSTAL_SIGNING_KEY_PATH:-/config/signing.key}"
 RAILS_LOG_ENABLED="${RAILS_LOG_ENABLED:-false}"
 WAIT_FOR_TARGETS="${WAIT_FOR_TARGETS:-mariadb-app:3306}"
 
+echo "$APP_URL"
+echo "$MAIN_DB_HOST"
 # Write the postal config file
 cat <<EOF >postal.yml
 main_db:
@@ -73,7 +75,7 @@ dns:
   track_domain: $TRACK_DOMAIN
 EOF
 
-echo "postal.yml written successfully."
+echo "postal.yml written successfully. $(realpath postal.yml) "
 # Initialze Postal
 postal initialize
 
