@@ -46,9 +46,17 @@ app_db_config = {
     "MESSAGE_DB_PASSWORD": MARIADB_ROOT_PASSWORD,
     "MAIN_DB_HOST": MAIN_DB_HOST,
     "MESSAGE_DB_HOST": MESSAGE_DB_HOST,
+    "RABBITMQ_HOST": "rabbitmq-app",
 }
 
 agent.write_envfile("app-db.env", app_db_config)
+
+rabbit_mq = {
+    "RABBITMQ_DEFAULT_USER": "postal",
+    "RABBITMQ_DEFAULT_PASS": generate_random_password(16),
+    "RABBITMQ_DEFAULT_VHOST": "postal",
+}
+agent.write_envfile("rabbitmq.env", rabbit_mq)
 
 agent.write_envfile("database.env", mariadb_config)
 

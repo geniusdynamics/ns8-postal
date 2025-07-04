@@ -1,0 +1,30 @@
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+[Unit]
+Description=Podman  rabbitmq-app.service
+BindsTo=postal.service
+After=postal.service
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=%S/state/environment
+EnvironmentFile=-%S/state/smarthost.env
+WorkingDirectory=%S/state
+Restart=always
+TimeoutStopSec=70
+ExecStartPre=/bin/mkdir -p tmp
+ExecStartPre=/bin/rm -f %t/rabbitmq-app.pid %t/rabbitmq-app.ctr-id
+ExecStartPre=-runagent discover-smarthost
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/rabbitmq-app.pid  --cidfile %t/rabbitmq-app.ctr-id --cgroups=no-conmon  --pod-id-file %t/postal.pod-id --replace -d --name  rabbitmq-app  --env-file rabbitmq.env  ${RABBITMQ_IMAGE}  
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/rabbitmq-app.ctr-id -t 10
+ExecReload=/usr/bin/podman kill -s HUP rabbitmq-app
+SyslogIdentifier=%u
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/rabbitmq-app.ctr-id
+PIDFile=%t/rabbitmq-app.pid
+Type=forking
+
+[Install]
+WantedBy=default.target

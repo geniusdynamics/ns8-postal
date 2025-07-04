@@ -1,0 +1,84 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+set -e
+source rabbitmq.env
+source database.env
+source app-db.env
+source postal.env
+
+# bootstrap postal app
+postal bootstrap "${APP_URL}"
+
+# Load environment variables or provide defaults
+MAIN_DB_HOST="${MAIN_DB_HOST:-mariadb-app}"
+MESSAGE_DB_HOST="${MESSAGE_DB_HOST:-mariadb-app}"
+MARIADB_USER="${MARIADB_USER:-postal}"
+MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-rootpassword}"
+MARIADB_DATABASE="${MARIADB_DATABASE:-postal}"
+RABBITMQ_DEFAULT_PASS="${RABBITMQ_DEFAULT_PASS:-password}"
+RABBITMQ_DEFAULT_USER="${RABBITMQ_DEFAULT_USER:-postal}"
+RABBITMQ_HOST="${RABBITMQ_HOST:-rabbitmq-app}"
+RABBITMQ_DEFAULT_VHOST="${RABBITMQ_DEFAULT_VHOST:-postal}"
+
+# Optional additional values
+APP_URL="${host:-postal.example.com}"
+MX_RECORD="postal.${APP_URL}"
+SMTP_SERVER_HOSTNAME="postal.${APP_URL}"
+SPF_INCLUDE="spf.${APP_URL}"
+RETURN_PATH="rp.${APP_URL}"
+ROUTE_DOMAIN="routes.${APP_URL}"
+TRACK_DOMAIN="postal.${APP_URL}"
+LOGGING_ENABLED="${LOGGING_ENABLED:-true}"
+RAILS_ENVIRONMENT="${RAILS_ENVIRONMENT:-test}"
+WAIT_FOR_TIMEOUT="${WAIT_FOR_TIMEOUT:-90}"
+POSTAL_SIGNING_KEY_PATH="${POSTAL_SIGNING_KEY_PATH:-/config/signing.key}"
+RAILS_LOG_ENABLED="${RAILS_LOG_ENABLED:-false}"
+WAIT_FOR_TARGETS="${WAIT_FOR_TARGETS:-mariadb-app:3306}"
+
+# Write the postal config file
+cat <<EOF >postal.yml
+main_db:
+  host: $MAIN_DB_HOST
+  username: $MARIADB_USER
+  password: $MARIADB_ROOT_PASSWORD
+  database: $MARIADB_DATABASE
+
+message_db:
+  host: $MESSAGE_DB_HOST
+  username: $MARIADB_USER
+  password: $MARIADB_ROOT_PASSWORD
+  prefix: $MARIADB_DATABASE
+
+rabbitmq:
+  host: $RABBITMQ_HOST
+  username: $RABBITMQ_DEFAULT_USER
+  password: $RABBITMQ_DEFAULT_PASS
+  vhost: $RABBITMQ_DEFAULT_VHOST
+smtp:
+  host: 127.0.0.1
+  port: $TCP_PORT
+  username: $USERNAME
+  password: $PASSWORD
+  from_name: $FROMNAME
+  from_address: $FROMADDRESS
+
+dns:
+ mx_records:
+    - $MX_RECORD
+  smtp_server_hostname: $SMTP_SERVER_HOSTNAME
+  spf_include: $SPF_INCLUDE
+  return_path: $RETURN_PATH
+  route_domain: $ROUTE_DOMAIN
+  track_domain: $TRACK_DOMAIN
+EOF
+
+echo "postal.yml written successfully."
+# Initialze Postal
+postal initalize
+
+# Make user

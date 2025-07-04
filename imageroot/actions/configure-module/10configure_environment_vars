@@ -15,12 +15,17 @@ data = json.load(sys.stdin)
 
 # This is specific to you module, so you need to change it accordingly.
 # agent.dump_env()
+APP_URL = data.get("host")
 LOGGING_ENABLED = data.get("LOGGING_ENABLED", "true")
 RAILS_ENVIRONMENT = data.get("RAILS_ENVIRONMENT", "test")
 WAIT_FOR_TIMEOUT = data.get("WAIT_FOR_TIMEOUT", "90")
 POSTAL_SIGNING_KEY_PATH = data.get("POSTAL_SIGNING_KEY_PATH", "/config/signing.key")
 RAILS_LOG_ENABLED = data.get("RAILS_LOG_ENABLED", "false")
 WAIT_FOR_TARGETS = data.get("WAIT_FOR_TARGETS", "mariadb-app:3306")
+USERNAME = data.get("username", "")
+PASSWORD = data.get("password")
+FROMNAME = data.get("from_name")
+FROMADDRESS = data.get("from_address")
 
 postal = {
     "LOGGING_ENABLED": LOGGING_ENABLED,
@@ -29,5 +34,10 @@ postal = {
     "POSTAL_SIGNING_KEY_PATH": POSTAL_SIGNING_KEY_PATH,
     "RAILS_LOG_ENABLED": RAILS_LOG_ENABLED,
     "WAIT_FOR_TARGETS": WAIT_FOR_TARGETS,
+    "APP_URL": APP_URL,
+    "USERNAME": USERNAME,
+    "PASSWORD": PASSWORD,
+    "FROMNAME": FROMNAME,
+    "FROMADDRESS": FROMADDRESS,
 }
 agent.write_envfile("postal.env", postal)
