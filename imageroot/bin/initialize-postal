@@ -6,10 +6,6 @@
 #
 
 set -e
-source rabbitmq.env
-source database.env
-source app-db.env
-source postal.env
 
 # bootstrap postal app
 postal bootstrap "${APP_URL}"
