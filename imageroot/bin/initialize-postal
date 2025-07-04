@@ -68,7 +68,7 @@ smtp:
   from_address: $FROMADDRESS
 
 dns:
- mx_records:
+  mx_records:
     - $MX_RECORD
   smtp_server_hostname: $SMTP_SERVER_HOSTNAME
   spf_include: $SPF_INCLUDE
@@ -79,6 +79,6 @@ EOF
 
 echo "postal.yml written successfully."
 # Initialze Postal
-postal initalize
+postal initialize
 
 # Make user

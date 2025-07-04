@@ -1,0 +1,33 @@
+main_db:
+  # Specify the connection details for your MySQL database
+  host: 127.0.0.1
+  username: root
+  password: password
+  database: postal
+
+message_db:
+  # Specify the connection details for your MySQL server that will be house the
+  # message databases for mail servers.
+  host: 127.0.0.1
+  username: root
+  password: password
+  prefix: postal
+
+rabbitmq:
+  # Specify connection details for your RabbitMQ server
+  host: 127.0.0.1
+  username: postal
+  password: password
+  vhost: postal
+
+dns:
+  # Specify the DNS records that you have configured. Refer to the documentation at
+  # https://github.com/atech/postal/wiki/Domains-&-DNS-Configuration for further
+  # information about these.
+  mx_records:
+    - postal.example.com
+  smtp_server_hostname: postal.example.com
+  spf_include: spf.postal.example.com
+  return_path: rp.postal.example.com
+  route_domain: routes.postal.example.com
+  track_domain: postal.example.com
