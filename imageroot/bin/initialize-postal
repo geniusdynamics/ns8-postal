@@ -22,7 +22,7 @@ RABBITMQ_HOST="${RABBITMQ_HOST:-rabbitmq-app}"
 RABBITMQ_DEFAULT_VHOST="${RABBITMQ_DEFAULT_VHOST:-postal}"
 
 # Optional additional values
-APP_URL="${host:-postal.example.com}"
+APP_URL="${APP_URL:-postal.example.com}"
 MX_RECORD="postal.${APP_URL}"
 SMTP_SERVER_HOSTNAME="postal.${APP_URL}"
 SPF_INCLUDE="spf.${APP_URL}"
@@ -38,6 +38,7 @@ WAIT_FOR_TARGETS="${WAIT_FOR_TARGETS:-mariadb-app:3306}"
 
 echo "$APP_URL"
 echo "$MAIN_DB_HOST"
+echo "$MARIADB_ROOT_PASSWORD"
 # Write the postal config file
 cat <<EOF >postal.yml
 main_db:
