@@ -26,7 +26,9 @@ jenv_custom = Environment(
 postal_env = agent.read_envfile("postal.env") if os.path.exists("postal.env") else {}
 
 # Load mariadb.env if available
-mariadb_env = agent.read_envfile("mariadb.env") if os.path.exists("mariadb.env") else {}
+mariadb_env = (
+    agent.read_envfile("database.env") if os.path.exists("database.env") else {}
+)
 rabbitmq_env = (
     agent.read_envfile("rabbitmq.env") if os.path.exists("rabbitmq.env") else {}
 )
