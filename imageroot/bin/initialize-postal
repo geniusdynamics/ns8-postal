@@ -1,83 +1,67 @@
-#!/bin/bash
+#!/usr/bin/env python3
 
 #
 # Copyright (C) 2022 Nethesis S.r.l.
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-set -e
+import os
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+import agent
 
-# bootstrap postal app
-postal bootstrap "${APP_URL}"
+# Set up Jinja2 environment
+jenv = Environment(
+    loader=FileSystemLoader("templates"),
+    autoescape=select_autoescape(),
+    keep_trailing_newline=True,
+)
 
-# Load environment variables or provide defaults
-MAIN_DB_HOST="${MAIN_DB_HOST:-mariadb-app}"
-MESSAGE_DB_HOST="${MESSAGE_DB_HOST:-mariadb-app}"
-MARIADB_USER="${MARIADB_USER:-postal}"
-MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-rootpassword}"
-MARIADB_DATABASE="${MARIADB_DATABASE:-postal}"
-RABBITMQ_DEFAULT_PASS="${RABBITMQ_DEFAULT_PASS:-password}"
-RABBITMQ_DEFAULT_USER="${RABBITMQ_DEFAULT_USER:-postal}"
-RABBITMQ_HOST="${RABBITMQ_HOST:-rabbitmq-app}"
-RABBITMQ_DEFAULT_VHOST="${RABBITMQ_DEFAULT_VHOST:-postal}"
+# Load postal.env if available
+postal_env = agent.read_envfile("postal.env") if os.path.exists("postal.env") else {}
 
-# Optional additional values
-APP_URL="${APP_URL:-postal.example.com}"
-MX_RECORD="postal.${APP_URL}"
-SMTP_SERVER_HOSTNAME="postal.${APP_URL}"
-SPF_INCLUDE="spf.${APP_URL}"
-RETURN_PATH="rp.${APP_URL}"
-ROUTE_DOMAIN="routes.${APP_URL}"
-TRACK_DOMAIN="postal.${APP_URL}"
-LOGGING_ENABLED="${LOGGING_ENABLED:-true}"
-RAILS_ENVIRONMENT="${RAILS_ENVIRONMENT:-test}"
-WAIT_FOR_TIMEOUT="${WAIT_FOR_TIMEOUT:-90}"
-POSTAL_SIGNING_KEY_PATH="${POSTAL_SIGNING_KEY_PATH:-/config/signing.key}"
-RAILS_LOG_ENABLED="${RAILS_LOG_ENABLED:-false}"
-WAIT_FOR_TARGETS="${WAIT_FOR_TARGETS:-mariadb-app:3306}"
+# Load mariadb.env if available
+mariadb_env = agent.read_envfile("mariadb.env") if os.path.exists("mariadb.env") else {}
+rabbitmq_env = (
+    agent.read_envfile("rabbitmq.env") if os.path.exists("rabbitmq.env") else {}
+)
 
-echo "$APP_URL"
-echo "$MAIN_DB_HOST"
-echo "$MARIADB_ROOT_PASSWORD"
-# Write the postal config file
-cat <<EOF >postal.yml
-main_db:
-  host: $MAIN_DB_HOST
-  username: $MARIADB_USER
-  password: $MARIADB_ROOT_PASSWORD
-  database: $MARIADB_DATABASE
+# Gather all required properties from environment
+properties = {
+    "main_db_host": postal_env.get("MAIN_DB_HOST", "mariadb-app"),
+    "message_db_host": postal_env.get("MESSAGE_DB_HOST", "mariadb-app"),
+    "mariadb_user": mariadb_env.get("MARIADB_USER", "postal"),
+    "mariadb_root_password": mariadb_env.get("MARIADB_ROOT_PASSWORD", "rootpassword"),
+    "mariadb_database": mariadb_env.get("MARIADB_DATABASE", "postal"),
+    "rabbitmq_host": postal_env.get("RABBITMQ_HOST", "rabbitmq-app"),
+    "rabbitmq_user": rabbitmq_env.get("RABBITMQ_DEFAULT_USER", "postal"),
+    "rabbitmq_pass": rabbitmq_env.get("RABBITMQ_DEFAULT_PASS", "password"),
+    "rabbitmq_vhost": rabbitmq_env.get("RABBITMQ_DEFAULT_VHOST", "postal"),
+    "app_url": postal_env.get("APP_URL", "postal.example.com"),
+    "tcp_port": postal_env.get("TCP_PORT", "25"),
+    "username": postal_env.get("USERNAME", "user"),
+    "password": postal_env.get("PASSWORD", "pass"),
+    "fromname": postal_env.get("FROMNAME", "Postal"),
+    "fromaddress": postal_env.get("FROMADDRESS", "postal@localhost"),
+}
 
-message_db:
-  host: $MESSAGE_DB_HOST
-  username: $MARIADB_USER
-  password: $MARIADB_ROOT_PASSWORD
-  prefix: $MARIADB_DATABASE
+# Derived DNS-related properties
+properties.update(
+    {
+        "mx_record": f"postal.{properties['app_url']}",
+        "smtp_server_hostname": f"postal.{properties['app_url']}",
+        "spf_include": f"spf.{properties['app_url']}",
+        "return_path": f"rp.{properties['app_url']}",
+        "route_domain": f"routes.{properties['app_url']}",
+        "track_domain": f"postal.{properties['app_url']}",
+    }
+)
 
-rabbitmq:
-  host: $RABBITMQ_HOST
-  username: $RABBITMQ_DEFAULT_USER
-  password: $RABBITMQ_DEFAULT_PASS
-  vhost: $RABBITMQ_DEFAULT_VHOST
-smtp:
-  host: 127.0.0.1
-  port: $TCP_PORT
-  username: $USERNAME
-  password: $PASSWORD
-  from_name: $FROMNAME
-  from_address: $FROMADDRESS
+# Render the template
+template = jenv.get_template("postal.yml.j2")
+output = template.render(properties)
 
-dns:
-  mx_records:
-    - $MX_RECORD
-  smtp_server_hostname: $SMTP_SERVER_HOSTNAME
-  spf_include: $SPF_INCLUDE
-  return_path: $RETURN_PATH
-  route_domain: $ROUTE_DOMAIN
-  track_domain: $TRACK_DOMAIN
-EOF
+# Write the output to postal.yml
+with open("postal.yml", "w") as f:
+    f.write(output)
 
-echo "postal.yml written successfully. $(realpath postal.yml) "
-# Initialze Postal
-postal initialize
-
-# Make user
+print("postal.yml written successfully:", os.path.realpath("postal.yml"))

@@ -1,0 +1,31 @@
+main_db:
+  # Specify the connection details for your MySQL database
+  host: {{ main_db_host }}
+  username: {{ mariadb_user }}
+  password: {{ mariadb_root_password }}
+  database: {{ mariadb_database }}
+
+message_db:
+  # Specify the connection details for your MySQL server that will house the
+  # message databases for mail servers.
+  host: {{ message_db_host }}
+  username: {{ mariadb_user }}
+  password: {{ mariadb_root_password }}
+  prefix: {{ mariadb_database }}
+
+rabbitmq:
+  # Specify connection details for your RabbitMQ server
+  host: {{ rabbitmq_host }}
+  username: {{ rabbitmq_user }}
+  password: {{ rabbitmq_pass }}
+  vhost: {{ rabbitmq_vhost }}
+
+dns:
+  # Specify the DNS records that you have configured
+  mx_records:
+    - {{ mx_record }}
+  smtp_server_hostname: {{ smtp_server_hostname }}
+  spf_include: {{ spf_include }}
+  return_path: {{ return_path }}
+  route_domain: {{ route_domain }}
+  track_domain: {{ track_domain }}
