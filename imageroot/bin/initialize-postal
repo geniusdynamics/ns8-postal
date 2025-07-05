@@ -8,6 +8,7 @@
 import os
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import agent
+import secrets
 
 # Set up Jinja2 environment
 jenv = Environment(
@@ -29,11 +30,12 @@ mariadb_env = agent.read_envfile("mariadb.env") if os.path.exists("mariadb.env")
 rabbitmq_env = (
     agent.read_envfile("rabbitmq.env") if os.path.exists("rabbitmq.env") else {}
 )
+appdb_env = agent.read_envfile("app-db.env") if os.path.exists("app-db.env") else {}
 
 # Gather all required properties from environment
 properties = {
     "main_db_host": postal_env.get("MAIN_DB_HOST", "mariadb-app"),
-    "message_db_host": postal_env.get("MESSAGE_DB_HOST", "mariadb-app"),
+    "message_db_host": appdb_env.get("MESSAGE_DB_HOST", "mariadb-app"),
     "mariadb_user": mariadb_env.get("MARIADB_USER", "postal"),
     "mariadb_root_password": mariadb_env.get("MARIADB_ROOT_PASSWORD", "rootpassword"),
     "mariadb_database": mariadb_env.get("MARIADB_DATABASE", "postal"),
@@ -47,6 +49,7 @@ properties = {
     "password": postal_env.get("PASSWORD", "pass"),
     "fromname": postal_env.get("FROMNAME", "Postal"),
     "fromaddress": postal_env.get("FROMADDRESS", "postal@localhost"),
+    "secretkey": appdb_env.get("SECRETKEY"),
 }
 
 # Derived DNS-related properties

@@ -9,6 +9,7 @@ import json
 import sys
 import agent
 import os
+import secrets
 
 # Try to parse the stdin as JSON.
 # If parsing fails, output everything to stderr
@@ -47,6 +48,7 @@ app_db_config = {
     "MAIN_DB_HOST": MAIN_DB_HOST,
     "MESSAGE_DB_HOST": MESSAGE_DB_HOST,
     "RABBITMQ_HOST": "rabbitmq-app",
+    "SECRETKEY": secrets.token_urlsafe(64),
 }
 
 agent.write_envfile("app-db.env", app_db_config)

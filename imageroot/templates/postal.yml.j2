@@ -1,3 +1,21 @@
+
+general:
+  use_ip_pools: false
+
+web:
+  host: {{ app_url }}
+  protocol: https
+
+web_server:
+  bind_address: 127.0.0.1
+  port: 5000
+
+smtp_server:
+  port: {{ tcp_port }}
+
+logging:
+  stdout: true
+
 main_db:
   host: {{ main_db_host }}
   username: {{ mariadb_user }}
@@ -11,7 +29,6 @@ message_db:
   prefix: {{ mariadb_database }}
 
 rabbitmq:
-  # Specify connection details for your RabbitMQ server
   host: {{ rabbitmq_host }}
   username: {{ rabbitmq_user }}
   password: {{ rabbitmq_pass }}
@@ -25,3 +42,15 @@ dns:
   return_path: {{ return_path }}
   route_domain: {{ route_domain }}
   track_domain: {{ track_domain }}
+
+smtp:
+  host: 127.0.0.1
+  port: 2525
+  username: {{ username }}
+  password: {{ password }}
+  from_name: {{ fromname }}
+  from_address: {{ fromaddress }}
+
+rails:
+  secret_key: {{ secretkey }}
+
