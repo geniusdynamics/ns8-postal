@@ -11,7 +11,12 @@ import agent
 
 # Set up Jinja2 environment
 jenv = Environment(
-    loader=FileSystemLoader("templates"),
+    loader=FileSystemLoader(os.getenv("AGENT_INSTALL_DIR") + "/templates"),
+    autoescape=select_autoescape(),
+    keep_trailing_newline=True,
+)
+jenv_custom = Environment(
+    loader=FileSystemLoader(os.getenv("AGENT_INSTALL_DIR") + "/state/templates"),
     autoescape=select_autoescape(),
     keep_trailing_newline=True,
 )
@@ -57,11 +62,12 @@ properties.update(
 )
 
 # Render the template
+
 template = jenv.get_template("postal.yml.j2")
 output = template.render(properties)
 
 # Write the output to postal.yml
-with open("postal.yml", "w") as f:
+with open("config/postal.yml", "w") as f:
     f.write(output)
 
 print("postal.yml written successfully:", os.path.realpath("postal.yml"))
