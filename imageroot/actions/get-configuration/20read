@@ -18,44 +18,55 @@ import agent
 config = {}
 
 # Read current configuration from the environment file
-config["host"] = os.getenv("TRAEFIK_HOST","")
+config["host"] = os.getenv("TRAEFIK_HOST", "")
 config["http2https"] = os.getenv("TRAEFIK_HTTP2HTTPS") == "True"
 config["lets_encrypt"] = os.getenv("TRAEFIK_LETS_ENCRYPT") == "True"
 
 # Dump the configuration to stdout
 # json.dump(config, fp=sys.stdout)
-if os.path.exists("postal.env"): 
-	data = agent.read_envfile("postal.env") 
-	config["WAIT_FOR_TIMEOUT"] = data.get("WAIT_FOR_TIMEOUT", "90") 
-	config["POSTAL_SIGNING_KEY_PATH"] = data.get("POSTAL_SIGNING_KEY_PATH", "/config/signing.key") 
-	config["RAILS_LOG_ENABLED"] = data.get("RAILS_LOG_ENABLED", "false") 
-	config["WAIT_FOR_TARGETS"] = data.get("WAIT_FOR_TARGETS", "mariadb:3306") 
-	config["MAIN_DB_HOST"] = data.get("MAIN_DB_HOST", "mariadb") 
-	config["MAIN_DB_USERNAME"] = data.get("MAIN_DB_USERNAME", "root") 
-	config["MESSAGE_DB_HOST"] = data.get("MESSAGE_DB_HOST", "mariadb") 
-	config["MESSAGE_DB_USERNAME"] = data.get("MESSAGE_DB_USERNAME", "root") 
-	config["LOGGING_ENABLED"] = data.get("LOGGING_ENABLED", "false") 
-	config["RAILS_ENVIRONMENT"] = data.get("RAILS_ENVIRONMENT", "test") 
-else: 
-	config["MAIN_DB_HOST"] = "mariadb" 
-	config["MAIN_DB_USERNAME"] = "root" 
-	config["MESSAGE_DB_HOST"] = "mariadb" 
-	config["MESSAGE_DB_USERNAME"] = "root" 
-	config["LOGGING_ENABLED"] = "false" 
-	config["RAILS_ENVIRONMENT"] = "test" 
-	config["WAIT_FOR_TIMEOUT"] = "90" 
-	config["POSTAL_SIGNING_KEY_PATH"] = "/config/signing.key" 
-	config["RAILS_LOG_ENABLED"] = "false" 
-	config["WAIT_FOR_TARGETS"] = "mariadb:3306" 
- 
-if os.path.exists("mariadb.env"): 
-	data = agent.read_envfile("mariadb.env") 
-	config["MARIADB_ALLOW_EMPTY_PASSWORD"] = data.get("MARIADB_ALLOW_EMPTY_PASSWORD", "yes") 
-	config["MARIADB_ALLOW_EMPTY_ROOT_PASSWORD"] = data.get("MARIADB_ALLOW_EMPTY_ROOT_PASSWORD", "yes") 
-	config["MARIADB_DATABASE"] = data.get("MARIADB_DATABASE", "postal") 
-else: 
-	config["MARIADB_DATABASE"] = "postal" 
-	config["MARIADB_ALLOW_EMPTY_PASSWORD"] = "yes" 
-	config["MARIADB_ALLOW_EMPTY_ROOT_PASSWORD"] = "yes" 
- 
+if os.path.exists("postal.env"):
+    data = agent.read_envfile("postal.env")
+    config["WAIT_FOR_TIMEOUT"] = data.get("WAIT_FOR_TIMEOUT", "90")
+    config["POSTAL_SIGNING_KEY_PATH"] = data.get(
+        "POSTAL_SIGNING_KEY_PATH", "/config/signing.key"
+    )
+    config["RAILS_LOG_ENABLED"] = data.get("RAILS_LOG_ENABLED", "false")
+    config["WAIT_FOR_TARGETS"] = data.get("WAIT_FOR_TARGETS", "mariadb:3306")
+    config["MAIN_DB_HOST"] = data.get("MAIN_DB_HOST", "mariadb")
+    config["MAIN_DB_USERNAME"] = data.get("MAIN_DB_USERNAME", "root")
+    config["MESSAGE_DB_HOST"] = data.get("MESSAGE_DB_HOST", "mariadb")
+    config["MESSAGE_DB_USERNAME"] = data.get("MESSAGE_DB_USERNAME", "root")
+    config["LOGGING_ENABLED"] = data.get("LOGGING_ENABLED", "false")
+    config["RAILS_ENVIRONMENT"] = data.get("RAILS_ENVIRONMENT", "test")
+    config["username"] = data.get("USERNAME", "user")
+    config["password"] = data.get("PASSWORD", "pass")
+    config["from_name"] = data.get("FROMNAME", "Postal")
+    config["from_address"] = data.get("FROMADDRESS", "postal@localhost")
+else:
+    config["WAIT_FOR_TIMEOUT"] = "90"
+    config["POSTAL_SIGNING_KEY_PATH"] = "/config/signing.key"
+    config["RAILS_LOG_ENABLED"] = "false"
+    config["WAIT_FOR_TARGETS"] = "mariadb:3306"
+    config["MAIN_DB_HOST"] = "mariadb"
+    config["MAIN_DB_USERNAME"] = "root"
+    config["MESSAGE_DB_HOST"] = "mariadb"
+    config["MESSAGE_DB_USERNAME"] = "root"
+    config["LOGGING_ENABLED"] = "false"
+    config["RAILS_ENVIRONMENT"] = "test"
+
+
+if os.path.exists("mariadb.env"):
+    data = agent.read_envfile("mariadb.env")
+    config["MARIADB_ALLOW_EMPTY_PASSWORD"] = data.get(
+        "MARIADB_ALLOW_EMPTY_PASSWORD", "yes"
+    )
+    config["MARIADB_ALLOW_EMPTY_ROOT_PASSWORD"] = data.get(
+        "MARIADB_ALLOW_EMPTY_ROOT_PASSWORD", "yes"
+    )
+    config["MARIADB_DATABASE"] = data.get("MARIADB_DATABASE", "postal")
+else:
+    config["MARIADB_DATABASE"] = "postal"
+    config["MARIADB_ALLOW_EMPTY_PASSWORD"] = "yes"
+    config["MARIADB_ALLOW_EMPTY_ROOT_PASSWORD"] = "yes"
+
 json.dump(config, fp=sys.stdout)
