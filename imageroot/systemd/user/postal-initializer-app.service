@@ -20,7 +20,7 @@ ExecStartPre=/bin/mkdir -p config
 ExecStartPre=/bin/rm -f %t/postal-initializer-app.pid %t/postal-initializer-app.ctr-id
 ExecStartPre=-runagent discover-smarthost
 ExecStartPre=-runagent initialize-postal
-ExecStart=/usr/bin/podman run --conmon-pidfile %t/postal-initializer-app.pid  --cidfile %t/postal-initializer-app.ctr-id --cgroups=no-conmon  --pod-id-file %t/postal.pod-id --replace -d --name  postal-initializer-app --volume %S/bin/initialize-postal:/initialize-postal:Z --volume ./config/postal.yml:/config/postal.yml:Z  --env-file database.env --env-file postal.env --env-file rabbitmq.env --env-file app-db.env   ${POSTAL_IMAGE}  /bin/bash -c "/initialize-postal"
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/postal-initializer-app.pid  --cidfile %t/postal-initializer-app.ctr-id --cgroups=no-conmon  --pod-id-file %t/postal.pod-id --replace -d --name  postal-initializer-app --volume %S/bin/postal-initializer:/postal-initializer:Z --volume ./config/postal.yml:/config/postal.yml:Z  --env-file database.env --env-file postal.env --env-file rabbitmq.env --env-file app-db.env   ${POSTAL_IMAGE}  /bin/bash -c "/postal-initializer"
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/postal-initializer-app.ctr-id -t 10
 ExecReload=/usr/bin/podman kill -s HUP postal-initializer-app
 SyslogIdentifier=%u

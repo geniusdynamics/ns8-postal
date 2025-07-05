@@ -1,0 +1,13 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+set -e
+
+# bootstrap postal app
+postal bootstrap "${APP_URL}"
+
+postal initialize

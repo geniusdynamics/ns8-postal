@@ -1,13 +1,10 @@
 main_db:
-  # Specify the connection details for your MySQL database
   host: {{ main_db_host }}
   username: {{ mariadb_user }}
   password: {{ mariadb_root_password }}
   database: {{ mariadb_database }}
 
 message_db:
-  # Specify the connection details for your MySQL server that will house the
-  # message databases for mail servers.
   host: {{ message_db_host }}
   username: {{ mariadb_user }}
   password: {{ mariadb_root_password }}
@@ -21,7 +18,6 @@ rabbitmq:
   vhost: {{ rabbitmq_vhost }}
 
 dns:
-  # Specify the DNS records that you have configured
   mx_records:
     - {{ mx_record }}
   smtp_server_hostname: {{ smtp_server_hostname }}
