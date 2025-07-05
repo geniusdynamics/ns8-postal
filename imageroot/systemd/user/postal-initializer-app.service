@@ -16,6 +16,7 @@ WorkingDirectory=%S/state
 Restart=always
 TimeoutStopSec=70
 ExecStartPre=/bin/mkdir -p tmp
+ExecStartPre=/bin/mkdir -p {config,backups,templates}
 ExecStartPre=/bin/rm -f %t/postal-initializer-app.pid %t/postal-initializer-app.ctr-id
 ExecStartPre=-runagent discover-smarthost
 ExecStartPre=-runagent initialize-postal
