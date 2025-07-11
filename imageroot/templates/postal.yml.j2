@@ -1,20 +1,12 @@
+version: 2
 
-general:
-  use_ip_pools: false
-
-web:
-  host: {{ app_url }}
-  protocol: https
-
-web_server:
-  bind_address: 127.0.0.1
-  port: 5000
+postal:
+  web_hostname: {{ app_url }}
+  web_protocol: https
+  smtp_hostname: {{ app_url }}
 
 smtp_server:
-  port: {{ tcp_port }}
-
-logging:
-  stdout: true
+  default_bind_address: "::"
 
 main_db:
   host: {{ main_db_host }}
@@ -27,12 +19,6 @@ message_db:
   username: {{ mariadb_user }}
   password: {{ mariadb_root_password }}
   prefix: {{ mariadb_database }}
-
-rabbitmq:
-  host: {{ rabbitmq_host }}
-  username: {{ rabbitmq_user }}
-  password: {{ rabbitmq_pass }}
-  vhost: {{ rabbitmq_vhost }}
 
 dns:
   mx_records:
