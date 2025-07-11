@@ -5,8 +5,8 @@
 
 [Unit]
 Description=Podman  postal-runner-app.service
-BindsTo=postal.service
-After=postal.service mariadb-app.service postal-initializer-app.service
+Wants=postal.service
+After=postal.service mariadb-app.service 
 
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n
