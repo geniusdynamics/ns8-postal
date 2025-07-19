@@ -5,7 +5,7 @@
 
 [Unit]
 Description=Podman  postal-initializer-app.service
-BindsTo=postal.service
+Wants=postal.service
 After=postal.service mariadb-app.service
 
 [Service]
