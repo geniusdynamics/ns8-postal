@@ -251,6 +251,10 @@ export default {
       this.host = config.host;
       this.isLetsEncryptEnabled = config.lets_encrypt;
       this.isHttpToHttpsEnabled = config.http2https;
+      this.username = config.username;
+      this.password = config.password;
+      this.from_name = config.from_name;
+      this.from_address = config.from_address;
 
       this.loading.getConfiguration = false;
       this.focusElement("host");
