@@ -29,9 +29,7 @@ postal_env = agent.read_envfile("postal.env") if os.path.exists("postal.env") el
 mariadb_env = (
     agent.read_envfile("database.env") if os.path.exists("database.env") else {}
 )
-rabbitmq_env = (
-    agent.read_envfile("rabbitmq.env") if os.path.exists("rabbitmq.env") else {}
-)
+
 appdb_env = agent.read_envfile("app-db.env") if os.path.exists("app-db.env") else {}
 
 # Gather all required properties from environment
@@ -41,10 +39,6 @@ properties = {
     "mariadb_user": mariadb_env.get("MARIADB_USER", "postal"),
     "mariadb_root_password": mariadb_env.get("MARIADB_ROOT_PASSWORD", "rootpassword"),
     "mariadb_database": mariadb_env.get("MARIADB_DATABASE", "postal"),
-    "rabbitmq_host": postal_env.get("RABBITMQ_HOST", "rabbitmq-app"),
-    "rabbitmq_user": rabbitmq_env.get("RABBITMQ_DEFAULT_USER", "postal"),
-    "rabbitmq_pass": rabbitmq_env.get("RABBITMQ_DEFAULT_PASS", "password"),
-    "rabbitmq_vhost": rabbitmq_env.get("RABBITMQ_DEFAULT_VHOST", "postal"),
     "app_url": postal_env.get("APP_URL", "postal.example.com"),
     "tcp_port": postal_env.get("TCP_PORT", "25"),
     "username": postal_env.get("USERNAME", "user"),

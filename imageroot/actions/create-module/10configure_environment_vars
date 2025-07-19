@@ -48,7 +48,6 @@ app_db_config = {
     "MESSAGE_DB_PASSWORD": MARIADB_PASSWORD,
     "MAIN_DB_HOST": MAIN_DB_HOST,
     "MESSAGE_DB_HOST": MESSAGE_DB_HOST,
-    "RABBITMQ_HOST": "rabbitmq-app",
     "SECRETKEY": secrets.token_urlsafe(64),
 }
 
