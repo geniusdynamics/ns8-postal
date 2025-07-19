@@ -26,7 +26,8 @@ ExecReload=/usr/bin/podman kill -s HUP postal-initializer-app
 SyslogIdentifier=%u
 ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/postal-initializer-app.ctr-id
 PIDFile=%t/postal-initializer-app.pid
-Type=forking
+Type=oneshot
+RemainAfterExit=true
 
 [Install]
 WantedBy=default.target
