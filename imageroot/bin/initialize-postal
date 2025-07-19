@@ -70,3 +70,12 @@ with open("config/postal.yml", "w") as f:
     f.write(output)
 
 print("postal.yml written successfully:", os.path.realpath("postal.yml"))
+
+caddy_template = jenv.get_template("Caddyfile.j2")
+caddy_output = caddy_template.render(properties)
+
+# Write the output to Caddyfile
+with open("Caddyfile", "w") as f:
+    f.write(caddy_output)
+
+print("Caddyfile written successfully:", os.path.realpath("Caddyfile"))
