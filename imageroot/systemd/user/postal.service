@@ -10,9 +10,9 @@
 
 [Unit]
 Description=Podman postal.service
-Wants=postal-initializer-app.service postal-app.service  postal-smtp-app.service postal-worker-app.service
+Wants=postal-app.service  postal-smtp-app.service postal-worker-app.service
 Requires=mariadb-app.service caddy-app.service postal-app.service postal-smtp-app.service
-Before=postal-initializer-app.service postal-app.service mariadb-app.service  postal-smtp-app.service postal-worker-app.service caddy-app.service
+Before=postal-app.service mariadb-app.service  postal-smtp-app.service postal-worker-app.service caddy-app.service
 
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n
