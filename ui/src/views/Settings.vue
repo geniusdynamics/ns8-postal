@@ -128,6 +128,17 @@
               >{{ $t("settings.save") }}</NsButton
             >
           </cv-form>
+          <div class="mg-top">
+            <NsButton
+              kind="secondary"
+              :icon="Settings20"
+              :loading="loading.initializePostal"
+              :disabled="loading.getConfiguration || loading.initializePostal"
+              @click="initializePostal"
+            >
+              {{ $t("settings.initialize_postal") }}
+            </NsButton>
+          </div>
         </cv-tile>
       </cv-column>
     </cv-row>
@@ -173,6 +184,7 @@ export default {
       loading: {
         getConfiguration: false,
         configureModule: false,
+        initializePostal: false,
       },
       error: {
         getConfiguration: "",
@@ -357,6 +369,68 @@ export default {
 
       // reload configuration
       this.getConfiguration();
+    },
+    async initializePostal() {
+      this.loading.initializePostal = true;
+      const taskAction = "initialize-postal";
+      const eventId = this.getUuid();
+
+      // register to task error
+      this.core.$root.$once(
+        `${taskAction}-aborted-${eventId}`,
+        this.initializePostalAborted,
+      );
+
+      // register to task validation
+      this.core.$root.$once(
+        `${taskAction}-validation-failed-${eventId}`,
+        this.initializePostalValidationFailed,
+      );
+
+      // register to task completion
+      this.core.$root.$once(
+        `${taskAction}-completed-${eventId}`,
+        this.initializePostalCompleted,
+      );
+      const res = await to(
+        this.createModuleTaskForApp(this.instanceName, {
+          action: taskAction,
+          data: {},
+          extra: {
+            title: this.$t("settings.instance_configuration", {
+              instance: this.instanceName,
+            }),
+            description: this.$t("settings.configuring"),
+            eventId,
+          },
+        }),
+      );
+      const err = res[0];
+
+      if (err) {
+        console.error(`error creating task ${taskAction}`, err);
+        this.error.initializePostal = this.getErrorMessage(err);
+        this.loading.initializePostal = false;
+        return;
+      }
+    },
+    initializePostalAborted(taskResult, taskContext) {
+      console.error(`${taskContext.action} aborted`, taskResult);
+      this.error.initializePostal = this.$t("error.generic_error");
+      this.loading.initializePostal = false;
+    },
+
+    initializePostalValidationFailed(taskResult, taskContext) {
+      console.error(`${taskContext.action} validation failed`, taskResult);
+      this.error.initializePostal = this.getErrorMessage(taskResult);
+      this.loading.initializePostal = false;
+    },
+
+    initializePostalCompleted() {
+      this.loading.initializePostal = false;
+
+      // You can reload any data here if needed after postal is initialized
+      this.getConfiguration(); // Reuse if it applies
     },
   },
 };
