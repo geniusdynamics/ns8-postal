@@ -62,6 +62,7 @@ properties.update(
 )
 
 # Render the template
+os.makedirs("config", exist_ok=True)
 
 template = jenv.get_template("postal.yml.j2")
 output = template.render(properties)
