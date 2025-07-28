@@ -6,6 +6,11 @@
 #
 
 set -e
+if [ -f database.env ]; then
+	set -a              # Export all variables automatically
+	source database.env # Load variables
+	set +a
+fi
 
 if ! systemctl --user -q is-active postal.service; then
 	exit 0
@@ -13,6 +18,8 @@ fi
 
 podman exec mariadb-app mysqldump \
 	--databases postal \
+	--user=root \
+	--password="$MARIADB_ROOT_PASSWORD" \
 	--default-character-set=utf8mb4 \
 	--skip-dump-date \
 	--ignore-table=mysql.event \
