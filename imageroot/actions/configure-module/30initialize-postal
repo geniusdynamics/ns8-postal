@@ -54,12 +54,12 @@ properties = {
 # Derived DNS-related properties
 properties.update(
     {
-        "mx_record": f"postal.{properties['app_url']}",
-        "smtp_server_hostname": f"postal.{properties['app_url']}",
+        "mx_record": properties['app_url'],
+        "smtp_server_hostname": f"email.{properties['app_url']}",
         "spf_include": f"spf.{properties['app_url']}",
         "return_path": f"rp.{properties['app_url']}",
         "route_domain": f"routes.{properties['app_url']}",
-        "track_domain": f"postal.{properties['app_url']}",
+        "track_domain": f"trk.{properties['app_url']}",
     }
 )
 
