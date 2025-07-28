@@ -107,7 +107,21 @@
             <cv-accordion ref="accordion" class="maxwidth mg-bottom">
               <cv-accordion-item :open="toggleAccordion[0]">
                 <template slot="title">{{ $t("settings.advanced") }}</template>
-                <template slot="content"> </template>
+                <template slot="content">
+                  <div class="mg-top">
+                    <NsButton
+                      kind="secondary"
+                      :icon="Settings20"
+                      :loading="loading.initializePostal"
+                      :disabled="
+                        loading.getConfiguration || loading.initializePostal
+                      "
+                      @click="initializePostal"
+                    >
+                      {{ $t("settings.initialize_postal") }}
+                    </NsButton>
+                  </div>
+                </template>
               </cv-accordion-item>
             </cv-accordion>
             <cv-row v-if="error.configureModule">
@@ -128,17 +142,6 @@
               >{{ $t("settings.save") }}</NsButton
             >
           </cv-form>
-          <div class="mg-top">
-            <NsButton
-              kind="secondary"
-              :icon="Settings20"
-              :loading="loading.initializePostal"
-              :disabled="loading.getConfiguration || loading.initializePostal"
-              @click="initializePostal"
-            >
-              {{ $t("settings.initialize_postal") }}
-            </NsButton>
-          </div>
         </cv-tile>
       </cv-column>
     </cv-row>
