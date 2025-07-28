@@ -6,7 +6,7 @@
 [Unit]
 Description=Podman  caddy-app.service
 Wants=postal.service
-After=postal.service mariadb-app.service
+After=postal.service mariadb-app.service  postal-smtp-app.service postal-app.service
 
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n
@@ -18,7 +18,7 @@ TimeoutStopSec=70
 ExecStartPre=/bin/mkdir -p tmp
 ExecStartPre=/bin/rm -f %t/caddy-app.pid %t/caddy-app.ctr-id
 ExecStartPre=-runagent discover-smarthost
-ExecStart=/usr/bin/podman run --conmon-pidfile %t/caddy-app.pid  --cidfile %t/caddy-app.ctr-id --cgroups=no-conmon  --pod-id-file %t/postal.pod-id --replace -d --name  caddy-app  --volume ci-config:/config  --volume ./Caddyfile:/etc/caddy/Caddyfile:Z --volume caddy-data:/data:Z   ${CADDY_IMAGE} 
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/caddy-app.pid  --cidfile %t/caddy-app.ctr-id --cgroups=no-conmon  --pod-id-file %t/postal.pod-id --replace -d --name  caddy-app  --volume ./config:/config:Z  --volume ./Caddyfile:/etc/caddy/Caddyfile:Z --volume caddy-data:/data:Z   ${CADDY_IMAGE} 
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/caddy-app.ctr-id -t 10
 ExecReload=/usr/bin/podman kill -s HUP caddy-app
 SyslogIdentifier=%u

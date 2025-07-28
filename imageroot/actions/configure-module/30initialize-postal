@@ -9,6 +9,7 @@ import os
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import agent
 import secrets
+import subprocess
 
 # Set up Jinja2 environment
 jenv = Environment(
@@ -37,10 +38,12 @@ properties = {
     "main_db_host": postal_env.get("MAIN_DB_HOST", "mariadb-app"),
     "message_db_host": appdb_env.get("MESSAGE_DB_HOST", "mariadb-app"),
     "mariadb_user": mariadb_env.get("MARIADB_USER", "postal"),
+    "mariadb_root_user": "root",
+    "mariadb_password": mariadb_env.get("MARIADB_PASSWORD", "dbpassword"),
     "mariadb_root_password": mariadb_env.get("MARIADB_ROOT_PASSWORD", "rootpassword"),
     "mariadb_database": mariadb_env.get("MARIADB_DATABASE", "postal"),
     "app_url": postal_env.get("APP_URL", "postal.example.com"),
-    "tcp_port": postal_env.get("TCP_PORT", "25"),
+    "tcp_port": postal_env.get("TCP_PORT", "2525"),
     "username": postal_env.get("USERNAME", "user"),
     "password": postal_env.get("PASSWORD", "pass"),
     "fromname": postal_env.get("FROMNAME", "Postal"),
@@ -61,6 +64,7 @@ properties.update(
 )
 
 # Render the template
+os.makedirs("config", exist_ok=True)
 
 template = jenv.get_template("postal.yml.j2")
 output = template.render(properties)
@@ -79,3 +83,22 @@ with open("Caddyfile", "w") as f:
     f.write(caddy_output)
 
 print("Caddyfile written successfully:", os.path.realpath("Caddyfile"))
+postal_yml_path = os.path.realpath("config/postal.yml")
+output_dir = os.path.dirname(postal_yml_path)
+signing_key_path = os.path.join(output_dir, "signing.key")  # Ensure output_path exists
+
+os.makedirs(output_dir, exist_ok=True)
+
+# Check and generate signing.key if not exists
+if not os.path.exists(signing_key_path):
+    print("=> Creating signing private key")
+    try:
+        subprocess.run(
+            ["openssl", "genrsa", "-out", signing_key_path, "1024"], check=True
+        )
+        os.chmod(signing_key_path, 0o644)
+        print(f"signing.key created at: {os.path.realpath(signing_key_path)}")
+    except subprocess.CalledProcessError as e:
+        print("❌ Failed to generate signing.key:", e)
+else:
+    print("signing.key already exists, skipping generation.")
