@@ -1,19 +1,19 @@
 {
   "name": "postal",
   "description": {
-    "en": "My postal module"
+    "en": "Postal is a complete and fully featured mail server for use by websites & web servers. Think Sendgrid, Mailgun or Postmark but open source and ready for you to run on your own servers."
   },
-  "categories": [],
+  "categories": ["collaboration"],
   "authors": [
     {
-      "name": "Name Surname",
-      "email": "author@yourmail.org"
+      "name": "Genius Dynamics",
+      "email": "support@genius.ke"
     }
   ],
   "docs": {
-    "documentation_url": "https://docs.postal.com/",
-    "bug_url": "https://github.com/NethServer/dev",
-    "code_url": "https://github.com/author/ns8-postal"
+    "documentation_url": "https://docs.postalserver.io/",
+    "bug_url": "https://github.com/geniusdynamics/dev",
+    "code_url": "https://github.com/geniusdynamics/ns8-postal"
   },
-  "source": "ghcr.io/nethserver/postal"
+  "source": "ghcr.io/geniusdynamics/postal"
 }
