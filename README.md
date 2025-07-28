@@ -138,31 +138,62 @@ Key configuration templates:
 
 ### Debug Commands
 
-1. **Check environment variables:**
+1. **Check general environment state:**
+   ```bash
+   runagent -m env
+   ```
+
+2. **Check instance environment variables:**
    ```bash
    runagent -m postal1 env
    ```
 
-2. **Enter agent environment:**
+3. **Enter agent environment:**
    ```bash
    runagent -m postal1
    ```
 
-3. **View running containers:**
+4. **View running containers:**
    ```bash
    runagent -m postal1
    podman ps
    ```
 
-4. **Inspect container environment:**
+5. **Access container shell:**
+   ```bash
+   runagent -m postal1 podman exec -it postal-app /bin/bash
+   ```
+
+   Inside the container, you can run:
+   - **Initialize Postal:**
+     ```bash
+     postal initialize
+     ```
+   - **Create a new user:**
+     ```bash
+     postal make-user
+     ```
+   - **View configuration:**
+     ```bash
+     cat config/postal.yml
+     ```
+
+6. **Inspect container environment:**
    ```bash
    podman exec postal-app env
    ```
 
-5. **Access container shell:**
+7. **Access container shell in sh:**
    ```bash
    podman exec -ti postal-app sh
    ```
+
+   Check specific configurations with:
+   ```bash
+   cat config/postal.yml
+   ```
+
+   These commands are essential for debugging and managing the Postal instance effectively.
 
 ### Project Structure
 
