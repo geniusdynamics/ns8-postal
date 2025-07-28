@@ -38,6 +38,7 @@ properties = {
     "main_db_host": postal_env.get("MAIN_DB_HOST", "mariadb-app"),
     "message_db_host": appdb_env.get("MESSAGE_DB_HOST", "mariadb-app"),
     "mariadb_user": mariadb_env.get("MARIADB_USER", "postal"),
+    "mariadb_root_user": "root",
     "mariadb_password": mariadb_env.get("MARIADB_PASSWORD", "dbpassword"),
     "mariadb_root_password": mariadb_env.get("MARIADB_ROOT_PASSWORD", "rootpassword"),
     "mariadb_database": mariadb_env.get("MARIADB_DATABASE", "postal"),
