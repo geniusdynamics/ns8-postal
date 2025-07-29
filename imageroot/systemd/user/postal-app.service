@@ -18,7 +18,20 @@ TimeoutStopSec=70
 ExecStartPre=/bin/mkdir -p tmp
 ExecStartPre=/bin/rm -f %t/postal-app.pid %t/postal-app.ctr-id
 ExecStartPre=-runagent discover-smarthost
-ExecStart=/usr/bin/podman run --conmon-pidfile %t/postal-app.pid  --cidfile %t/postal-app.ctr-id --cgroups=no-conmon  --pod-id-file %t/postal.pod-id --replace -d --name  postal-app  --volume ./config:/config:Z  --volume ./config/postal.yml:/config/postal.yml:Z   --env-file postal.env --env-file app-db.env  ${POSTAL_IMAGE} postal web-server 
+ExecStart=/usr/bin/podman run \
+  --conmon-pidfile %t/postal-app.pid \
+  --cidfile %t/postal-app.ctr-id \
+  --cgroups=no-conmon \
+  --pod-id-file %t/postal.pod-id \
+  --replace \
+  -d \
+  --name postal-app \
+  --volume ./config:/config:Z \
+  --volume ./config/postal.yml:/config/postal.yml:Z \
+  --env-file postal.env \
+  --env-file app-db.env \
+  ${POSTAL_IMAGE} \
+  postal web-server
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/postal-app.ctr-id -t 10
 ExecReload=/usr/bin/podman kill -s HUP postal-app
 SyslogIdentifier=%u
