@@ -1,9 +1,12 @@
 {
   "name": "postal",
   "description": {
-    "en": "My postal module"
+    "en": "Postal is a self-hosted mail delivery platform to send and track transactional and bulk email from your applications.",
+    "it": "Postal è una piattaforma self-hosted per inviare e tracciare email transazionali e massive dalle applicazioni."
   },
-  "categories": [],
+  "categories": [
+    "communication"
+  ],
   "authors": [
     {
       "name": "Name Surname",
