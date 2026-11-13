@@ -42,7 +42,8 @@
     "username": "Username",
     "password": "Password",
     "from_name": "From Name",
-    "from_address": "From Address"
+    "from_address": "From Address",
+    "initialize_postal": "Initialize Postal"
   },
   "about": {
     "title": "About"
