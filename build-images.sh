@@ -49,7 +49,8 @@ buildah config --entrypoint=/ \
 	--label="org.nethserver.authorizations=traefik@node:routeadm" \
 	--label="org.nethserver.tcp-ports-demand=1" \
 	--label="org.nethserver.rootfull=0" \
-	--label="org.nethserver.images=ghcr.io/postalserver/postal:3.3.7 docker.io/mariadb:latest docker.io/caddy:2.11.9 " \
+    --label="org.nethserver.min-core=3.0.0" \
+	--label="org.nethserver.images=ghcr.io/postalserver/postal:3.3.7 docker.io/mariadb:13.0.2 docker.io/caddy:2.11.9 " \
 	"${container}"
 # Commit the image
 buildah commit "${container}" "${repobase}/${reponame}"
