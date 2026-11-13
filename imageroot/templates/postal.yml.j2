@@ -5,6 +5,12 @@ postal:
   web_protocol: https
   smtp_hostname: {{ app_url }}
 
+web_server:
+  # The pod publishes port 5000 on its network interface, not on loopback:
+  # Postal's default (127.0.0.1) answers no request from Traefik
+  default_bind_address: "0.0.0.0"
+  default_port: 5000
+
 smtp_server:
   default_bind_address: "::"
 
