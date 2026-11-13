@@ -9,5 +9,4 @@ set -e
 
 # bootstrap postal app
 # postal bootstrap "${APP_URL}"
-
-postal initialize
+podman exec -it postal-app bash -c "postal initialize"

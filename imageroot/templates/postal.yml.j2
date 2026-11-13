@@ -10,13 +10,13 @@ smtp_server:
 
 main_db:
   host: {{ main_db_host }}
-  username: {{ mariadb_user }}
+  username: {{ mariadb_root_user }}
   password: {{ mariadb_root_password }}
   database: {{ mariadb_database }}
 
 message_db:
   host: {{ message_db_host }}
-  username: {{ mariadb_user }}
+  username: {{ mariadb_root_user }}
   password: {{ mariadb_root_password }}
   prefix: {{ mariadb_database }}
 
