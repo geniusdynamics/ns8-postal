@@ -16,7 +16,7 @@ if ! systemctl --user -q is-active postal.service; then
 	exit 0
 fi
 
-podman exec mariadb-app mysqldump \
+podman exec mariadb-app mariadb-dump \
 	--databases postal \
 	--user=root \
 	--password="$MARIADB_ROOT_PASSWORD" \

@@ -15,3 +15,6 @@ touch smarthost.env
 
 systemctl --user enable postal.service
 systemctl --user restart postal.service
+
+# A new instance needs its database schema before Postal works
+postal-db-init

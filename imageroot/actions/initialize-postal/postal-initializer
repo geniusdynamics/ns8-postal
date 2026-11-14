@@ -9,4 +9,6 @@ set -e
 
 # bootstrap postal app
 # postal bootstrap "${APP_URL}"
-podman exec -it postal-app bash -c "postal initialize"
+# Same safe initialization as configure-module: never reload the schema of
+# a database in use
+postal-db-init

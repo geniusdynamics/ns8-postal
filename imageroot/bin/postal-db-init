@@ -1,0 +1,45 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+#
+# Create the Postal database schema on a new instance. "postal initialize"
+# loads the schema and would replace the tables of a database in use: run it
+# only while the postal database has no tables. Existing instances keep
+# their data; their schema migrations run with "postal upgrade".
+#
+
+set -e
+exec 1>&2
+
+set -a
+source ./database.env
+set +a
+
+# Wait for MariaDB to answer (up to 2 minutes)
+for _ in $(seq 1 60); do
+    if podman exec mariadb-app mariadb-admin ping -h 127.0.0.1 -u root -p"${MARIADB_ROOT_PASSWORD}" --silent 2>/dev/null; then
+        break
+    fi
+    sleep 2
+done
+
+tables=$(podman exec mariadb-app mariadb -h 127.0.0.1 -u root -p"${MARIADB_ROOT_PASSWORD}" -N -B \
+    -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${MARIADB_DATABASE:-postal}'")
+
+# Wait for the Postal web container, which runs the commands below
+for _ in $(seq 1 60); do
+    podman container exists postal-app && [[ "$(podman inspect -f '{{.State.Running}}' postal-app)" == true ]] && break
+    sleep 2
+done
+
+if [[ "${tables}" == 0 ]]; then
+    echo "Empty postal database: creating the Postal schema"
+    podman exec postal-app postal initialize
+else
+    echo "The postal database has ${tables} tables: running the Postal migrations"
+    podman exec postal-app postal upgrade
+fi
