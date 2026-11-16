@@ -2,36 +2,339 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Configure postal",
     "$id": "http://nethserver.org/json-schema/task/input/postal/configure-module",
-    "description": "Configure postal",
+    "description": "Configure postal. Fields left out keep their current value.",
     "examples": [
         {
             "host": "postal.domain.org",
             "http2https": true,
             "lets_encrypt": true
+        },
+        {
+            "host": "postal.domain.org",
+            "http2https": true,
+            "lets_encrypt": false,
+            "smtp_port": 25,
+            "default_maximum_delivery_attempts": 10,
+            "default_spam_threshold": 6,
+            "smtp_relays": [
+                {
+                    "host": "relay.example.net",
+                    "port": 587,
+                    "ssl_mode": "STARTTLS"
+                }
+            ],
+            "oidc_enabled": true,
+            "oidc_issuer": "https://sso.example.org/realms/main",
+            "oidc_identifier": "postal",
+            "oidc_secret": "client-secret"
         }
     ],
     "type": "object",
     "required": [
-        "host",
-        "http2https",
-        "lets_encrypt"
+        "host"
     ],
     "properties": {
         "host": {
             "type": "string",
-            "description": "Host name for the application, like 'postal.domain.org'",
+            "description": "Host name of the web interface, like 'postal.domain.org'",
             "format": "hostname",
             "pattern": "\\."
         },
-        "lets_encrypt": {
-            "type": "boolean",
-            "title": "Let's Encrypt certificate",
-            "description": "Request a valid Let's Encrypt certificate."
-        },
         "http2https": {
             "type": "boolean",
-            "title": "HTTP to HTTPS redirection",
             "description": "Redirect all the HTTP requests to HTTPS"
+        },
+        "lets_encrypt": {
+            "type": "boolean",
+            "description": "Request a valid Let's Encrypt certificate"
+        },
+        "smtp_hostname": {
+            "type": "string",
+            "description": "Host name of the SMTP server (empty: the host name of the web interface)"
+        },
+        "smtp_port": {
+            "type": "integer",
+            "description": "Node TCP port of the SMTP server (pod port 25), opened in the firewall"
+        },
+        "smtp_tls": {
+            "type": "boolean",
+            "description": "Offer STARTTLS with the Traefik certificate of the SMTP host name"
+        },
+        "max_message_size": {
+            "type": "integer"
+        },
+        "smtp_log_connections": {
+            "type": "boolean"
+        },
+        "use_ip_pools": {
+            "type": "boolean",
+            "description": "POSTAL_USE_IP_POOLS: enable the IP pools of Postal"
+        },
+        "default_maximum_delivery_attempts": {
+            "type": "integer"
+        },
+        "default_maximum_hold_expiry_days": {
+            "type": "integer"
+        },
+        "default_suppression_list_automatic_removal_days": {
+            "type": "integer"
+        },
+        "default_spam_threshold": {
+            "type": "integer"
+        },
+        "default_spam_failure_threshold": {
+            "type": "integer"
+        },
+        "use_resent_sender_header": {
+            "type": "boolean"
+        },
+        "helo_hostname": {
+            "type": "string"
+        },
+        "batch_queued_messages": {
+            "type": "boolean"
+        },
+        "queued_message_lock_stale_days": {
+            "type": "integer"
+        },
+        "smtp_client_open_timeout": {
+            "type": "integer"
+        },
+        "smtp_client_read_timeout": {
+            "type": "integer"
+        },
+        "smtp_relays": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+                "type": "object",
+                "required": [
+                    "host"
+                ],
+                "properties": {
+                    "host": {
+                        "type": "string"
+                    },
+                    "port": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 65535
+                    },
+                    "ssl_mode": {
+                        "type": "string",
+                        "enum": [
+                            "Auto",
+                            "STARTTLS",
+                            "TLS",
+                            "None"
+                        ]
+                    }
+                }
+            },
+            "description": "POSTAL_SMTP_RELAYS: send every message through these relays"
+        },
+        "relay_via_cluster_smarthost": {
+            "type": "boolean",
+            "description": "Send every message through the NS8 cluster smarthost (it must accept mail without authentication)"
+        },
+        "cluster_relay_provider": {
+            "type": "boolean",
+            "description": "Offer Postal as smarthost of the cluster (requires smtp_port 25)"
+        },
+        "app_smtp_mode": {
+            "type": "string",
+            "description": "SMTP server of the e-mails of Postal itself: the cluster smarthost or a custom one",
+            "enum": [
+                "smarthost",
+                "custom"
+            ]
+        },
+        "app_smtp_host": {
+            "type": "string"
+        },
+        "app_smtp_port": {
+            "type": "integer"
+        },
+        "app_smtp_username": {
+            "type": "string"
+        },
+        "app_smtp_tls": {
+            "type": "string",
+            "enum": [
+                "starttls_auto",
+                "starttls",
+                "none"
+            ]
+        },
+        "app_smtp_tls_verify": {
+            "type": "boolean"
+        },
+        "from_name": {
+            "type": "string"
+        },
+        "from_address": {
+            "type": "string"
+        },
+        "oidc_enabled": {
+            "type": "boolean"
+        },
+        "oidc_name": {
+            "type": "string"
+        },
+        "oidc_issuer": {
+            "type": "string"
+        },
+        "oidc_identifier": {
+            "type": "string"
+        },
+        "oidc_scopes": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "oidc_uid_field": {
+            "type": "string"
+        },
+        "oidc_email_address_field": {
+            "type": "string"
+        },
+        "oidc_name_field": {
+            "type": "string"
+        },
+        "oidc_discovery": {
+            "type": "boolean"
+        },
+        "oidc_authorization_endpoint": {
+            "type": "string"
+        },
+        "oidc_token_endpoint": {
+            "type": "string"
+        },
+        "oidc_userinfo_endpoint": {
+            "type": "string"
+        },
+        "oidc_jwks_uri": {
+            "type": "string"
+        },
+        "oidc_local_authentication_enabled": {
+            "type": "boolean",
+            "description": "Local logins: can be disabled only with OIDC enabled"
+        },
+        "rspamd_enabled": {
+            "type": "boolean"
+        },
+        "rspamd_host": {
+            "type": "string"
+        },
+        "rspamd_port": {
+            "type": "integer"
+        },
+        "rspamd_ssl": {
+            "type": "boolean"
+        },
+        "rspamd_flags": {
+            "type": "string"
+        },
+        "spamd_enabled": {
+            "type": "boolean"
+        },
+        "spamd_host": {
+            "type": "string"
+        },
+        "spamd_port": {
+            "type": "integer"
+        },
+        "clamav_enabled": {
+            "type": "boolean"
+        },
+        "clamav_host": {
+            "type": "string"
+        },
+        "clamav_port": {
+            "type": "integer"
+        },
+        "dns_mx_records": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "dns_spf_include": {
+            "type": "string"
+        },
+        "dns_return_path_domain": {
+            "type": "string"
+        },
+        "dns_route_domain": {
+            "type": "string"
+        },
+        "dns_track_domain": {
+            "type": "string"
+        },
+        "dns_dkim_identifier": {
+            "type": "string"
+        },
+        "dns_custom_return_path_prefix": {
+            "type": "string"
+        },
+        "dns_domain_verify_prefix": {
+            "type": "string"
+        },
+        "use_local_ns_for_domain_verification": {
+            "type": "boolean"
+        },
+        "web_server_max_threads": {
+            "type": "integer"
+        },
+        "worker_threads": {
+            "type": "integer"
+        },
+        "main_db_pool_size": {
+            "type": "integer"
+        },
+        "logging_enabled": {
+            "type": "boolean"
+        },
+        "rails_log_enabled": {
+            "type": "boolean"
+        },
+        "gelf_host": {
+            "type": "string"
+        },
+        "gelf_port": {
+            "type": "integer"
+        },
+        "gelf_facility": {
+            "type": "string"
+        },
+        "trusted_proxies": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "allowed_request_destinations": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "oidc_secret": {
+            "type": "string",
+            "description": "Write-only secret: empty or missing keeps the stored value"
+        },
+        "app_smtp_password": {
+            "type": "string",
+            "description": "Write-only secret: empty or missing keeps the stored value"
+        },
+        "rspamd_password": {
+            "type": "string",
+            "description": "Write-only secret: empty or missing keeps the stored value"
+        },
+        "sentry_dsn": {
+            "type": "string",
+            "description": "Write-only secret: empty or missing keeps the stored value"
         }
     }
 }

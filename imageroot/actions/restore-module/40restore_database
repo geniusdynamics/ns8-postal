@@ -8,10 +8,22 @@
 set -e -o pipefail
 exec 1>&2 # Redirect any output to the journal (stderr)
 
+if [[ ! -f postal.sql ]]; then
+    # Backup without dump (the service was stopped during the backup):
+    # an older backup may have restored the database volume itself
+    echo "No postal.sql in the backup: keeping the restored database volume"
+    exit 0
+fi
+
+# The dump holds every Postal database (main and message databases): load
+# it in an empty volume. An older backup also restored the database files,
+# and the MariaDB entrypoint skips its init scripts on a non-empty volume.
+podman volume rm --force mysql-data >/dev/null 2>&1 || :
+podman volume create mysql-data
+
 # Prepare an initialization script that restores the dump file
 mkdir -vp initdb.d
 mv -v postal.sql initdb.d
-#do the bash file to restore and exit once done
 cat - >initdb.d/zz_postal_restore.sh <<'EOS'
 # Print additional information:
 mariadb --version
@@ -24,9 +36,7 @@ EOS
 # once we exit we remove initdb.d
 trap 'rm -rfv initdb.d/' EXIT
 
-# we start a container to initiate a database and load the dump
-# at the end of postal_restore.sh the dump is loaded and
-# we exit the container
+# Start a container that initializes the database, loads the dump and exits
 podman run \
 	--rm \
 	--interactive \

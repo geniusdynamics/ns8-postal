@@ -4,23 +4,32 @@
 #
 
 #
-# This systemd unit starts a postal instance using Podman.
-# Most parts of this file come from podman-generate-systemd.
+# The postal pod: MariaDB, the Postal web server, SMTP server and worker.
+# Traefik reaches the web server on 127.0.0.1:${TCP_PORT}; the SMTP server
+# (pod port 25) is published on ${POSTAL_SMTP_PORT} of every address of
+# the node, opened in the firewall by configure-module.
 #
 
 [Unit]
 Description=Podman postal.service
-Wants=postal-app.service  postal-smtp-app.service postal-worker-app.service
-Requires=mariadb-app.service caddy-app.service postal-app.service postal-smtp-app.service
-Before=postal-app.service mariadb-app.service  postal-smtp-app.service postal-worker-app.service caddy-app.service
+Requires=mariadb-app.service postal-app.service postal-smtp-app.service postal-worker-app.service
+Before=mariadb-app.service postal-app.service postal-smtp-app.service postal-worker-app.service
 
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n
+Environment=POSTAL_SMTP_PORT=2525
 EnvironmentFile=-%S/state/environment
+WorkingDirectory=%S/state
 Restart=always
+RestartSec=10
 TimeoutStopSec=70
 ExecStartPre=/bin/rm -f %t/postal.pid %t/postal.pod-id
-ExecStartPre=/usr/bin/podman pod create --infra-conmon-pidfile %t/postal.pid  --pod-id-file %t/postal.pod-id  --name postal  --publish 127.0.0.1:${TCP_PORT}:5000 --publish 2525:25 --publish 2143:143 --add-host smtp.postal:127.0.0.1 --add-host imap.postal:127.0.0.1  --replace
+ExecStartPre=/usr/bin/podman pod create --infra-conmon-pidfile %t/postal.pid \
+    --pod-id-file %t/postal.pod-id \
+    --name postal \
+    --publish 127.0.0.1:${TCP_PORT}:5000 \
+    --publish ${POSTAL_SMTP_PORT}:25 \
+    --replace
 ExecStart=/usr/bin/podman pod start --pod-id-file %t/postal.pod-id
 ExecStop=/usr/bin/podman pod stop --ignore --pod-id-file %t/postal.pod-id -t 10
 ExecStopPost=/usr/bin/podman pod rm --ignore -f --pod-id-file %t/postal.pod-id

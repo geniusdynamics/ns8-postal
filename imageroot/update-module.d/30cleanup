@@ -1,0 +1,12 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Volumes of older releases, unused: Caddy data, and an empty /config of
+# the SMTP server and worker
+
+exec 1>&2
+podman volume rm caddy-data ci-config 2>/dev/null || :
