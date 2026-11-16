@@ -33,9 +33,18 @@ Web answers
     ...    return_rc=True    return_stdout=False
     Should Be Equal As Integers    ${rc}    0
 
+Wait for the SMTP port to be released
+    # The released modules check the SMTP port with agent.tcp_port_in_use(),
+    # which takes the connections left in TIME_WAIT (up to 60 seconds) by the
+    # SMTP tests of the instance removed before for a service on the port
+    ${rc} =    Execute Command    for i in $(seq 1 60); do python3 -c 'import socket; socket.socket().bind(("", 2525))' 2>/dev/null && exit 0; sleep 2; done; exit 1
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0
+
 Update scenario
     [Arguments]    ${release}
     Log    Update from ${release} to ${IMAGE_URL}    console=${True}
+    Wait for the SMTP port to be released
     ${out}    ${rc} =    Execute Command    add-module ghcr.io/geniusdynamics/postal:${release} 1
     ...    return_rc=True
     Should Be Equal As Integers    ${rc}    0    add-module ${release} failed: ${out}
