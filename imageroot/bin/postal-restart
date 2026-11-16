@@ -21,6 +21,13 @@ if [[ "$1" == "--if-active" ]] && ! systemctl --user -q is-active postal.service
     exit 0
 fi
 
+# A full restart applies every pending change
+rm -f .restart-set.json
+# The Postal processes wait for the schema (ConditionPathExists): the pod
+# starts them only after postal-db-init
+rm -f .postal-db-ready
 systemctl --user restart postal.service mariadb-app.service
 postal-db-init
-systemctl --user start postal-app.service postal-smtp-app.service postal-worker-app.service
+touch .postal-db-ready
+# rspamd-app and clamav-app start only while their setting is on
+systemctl --user start rspamd-app.service clamav-app.service postal-app.service postal-smtp-app.service postal-worker-app.service

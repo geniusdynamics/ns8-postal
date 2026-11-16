@@ -1,0 +1,15 @@
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+[Unit]
+Description=Postal track domain routes and certificates
+
+[Timer]
+OnCalendar=*:0/5
+RandomizedDelaySec=30
+Unit=postal-track-routes.service
+
+[Install]
+WantedBy=timers.target

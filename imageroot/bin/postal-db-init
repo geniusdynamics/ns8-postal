@@ -17,20 +17,26 @@
 set -e
 exec 1>&2
 
-set -a
-source ./database.env
-set +a
+database=$(sed -n 's/^MARIADB_DATABASE=//p' database.env)
+database="${database:-postal}"
+
+# One schema change at a time (configure-module, update, initialize-postal)
+exec 9>.postal-db-init.lock
+flock 9
 
 # Wait for MariaDB to answer (up to 2 minutes)
 for _ in $(seq 1 60); do
-    if podman exec -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" mariadb-app mariadb-admin ping -h 127.0.0.1 -u root --silent 2>/dev/null; then
+    if postal-mariadb mariadb-admin ping -h 127.0.0.1 -u root --silent >/dev/null 2>&1; then
         break
     fi
     sleep 2
 done
 
-tables=$(podman exec -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" mariadb-app mariadb -h 127.0.0.1 -u root -N -B \
-    -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${MARIADB_DATABASE:-postal}'")
+# Tables of the Postal schema: "postal initialize" (schema load) only on an
+# empty database, "postal upgrade" (migrations) otherwise, also after an
+# interrupted initialization
+tables=$(postal-mariadb mariadb -h 127.0.0.1 -u root -N -B \
+    -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${database}' AND table_name <> 'schema_migrations'")
 
 if [[ "${tables}" == 0 ]]; then
     echo "Empty postal database: creating the Postal schema"

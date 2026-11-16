@@ -22,8 +22,16 @@ if updates:
     sec.update(updates)
     postal.write_secrets(sec)
 
+import os
+if str(settings["smtp_port"]) != os.environ.get("POSTAL_SMTP_PORT", str(current["smtp_port"])):
+    # The pod publishes the SMTP port: create it again
+    postal.mark_restart([postal.POD])
+
 agent.set_env("TRAEFIK_HOST", settings["host"])
 agent.set_env("TRAEFIK_HTTP2HTTPS", settings["http2https"])
 agent.set_env("TRAEFIK_LETS_ENCRYPT", settings["lets_encrypt"])
 agent.set_env("POSTAL_SMTP_PORT", settings["smtp_port"])
 agent.set_env("POSTAL_SMTP_HOSTNAME", postal.smtp_hostname(settings))
+if postal.needs_extra_ports(settings):
+    postal.ensure_extra_ports()
+postal.set_unit_env(settings)

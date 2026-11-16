@@ -95,15 +95,39 @@
                     ref="smtp_hostname"
                     class="mg-bottom maxwidth"
                   />
-                  <NsTextInput
-                    type="number"
-                    :label="$t('settings.smtp_port')"
+                  <NsComboBox
+                    :title="$t('settings.smtp_port')"
+                    :label="$t('settings.smtp_port_placeholder')"
                     :helper-text="$t('settings.smtp_port_helper')"
-                    v-model.number="form.smtp_port"
+                    v-model="smtpPort"
+                    :options="smtpPortOptions"
+                    :auto-filter="false"
+                    :auto-highlight="true"
+                    :accept-user-input="true"
+                    :user-input-label="$t('settings.other_port')"
                     :invalid-message="error.smtp_port"
                     :disabled="busy"
                     ref="smtp_port"
                     class="mg-bottom maxwidth"
+                  />
+                  <NsInlineNotification
+                    v-if="smtpPortUsedBy"
+                    kind="warning"
+                    :title="$t('settings.smtp_port_conflict_title')"
+                    :description="
+                      $t('settings.smtp_port_conflict', {
+                        port: form.smtp_port,
+                        module: smtpPortUsedBy,
+                      })
+                    "
+                    :showCloseButton="false"
+                  />
+                  <NsInlineNotification
+                    v-else-if="Number(form.smtp_port) === 25"
+                    kind="info"
+                    :title="$t('settings.smtp_port_25_title')"
+                    :description="$t('settings.smtp_port_25')"
+                    :showCloseButton="false"
                   />
                   <NsToggle
                     value="smtpTls"
@@ -146,6 +170,37 @@
                     class="mg-bottom-sm"
                     >{{ record }}</NsCodeSnippet
                   >
+                </template>
+              </cv-accordion-item>
+
+              <!-- track domains -->
+              <cv-accordion-item>
+                <template slot="title">{{
+                  $t("settings.track_domains")
+                }}</template>
+                <template slot="content">
+                  <p class="mg-bottom">
+                    {{
+                      $t("settings.track_domains_description", {
+                        track: dns.track_domain || "",
+                      })
+                    }}
+                  </p>
+                  <p v-if="!trackDomains.length" class="mg-bottom helper">
+                    {{ $t("settings.no_track_domains") }}
+                  </p>
+                  <div
+                    v-for="td in trackDomains"
+                    :key="td.name"
+                    class="track-domain mg-bottom-sm"
+                  >
+                    <span class="track-name">{{ td.name }}</span>
+                    <NsTag
+                      :kind="trackStatusKind(td.status)"
+                      :label="$t('settings.track_status_' + td.status)"
+                      size="sm"
+                    />
+                  </div>
                 </template>
               </cv-accordion-item>
 
@@ -213,10 +268,39 @@
                     }}</template>
                   </NsToggle>
                   <NsInlineNotification
-                    v-if="form.use_ip_pools"
+                    v-if="form.use_ip_pools && !form.worker_host_network"
                     kind="warning"
                     :title="$t('settings.ip_pools_limits')"
                     :description="$t('settings.ip_pools_limits_description')"
+                    :showCloseButton="false"
+                  />
+                  <NsToggle
+                    value="workerHostNetwork"
+                    :label="$t('settings.worker_host_network')"
+                    v-model="form.worker_host_network"
+                    :disabled="busy"
+                    class="mg-bottom"
+                  >
+                    <template #tooltip>{{
+                      $t("settings.worker_host_network_tooltip")
+                    }}</template>
+                    <template slot="text-left">{{
+                      $t("settings.disabled")
+                    }}</template>
+                    <template slot="text-right">{{
+                      $t("settings.enabled")
+                    }}</template>
+                  </NsToggle>
+                  <p class="mg-bottom helper">
+                    {{ $t("settings.worker_host_network_description") }}
+                  </p>
+                  <NsInlineNotification
+                    v-if="form.worker_host_network"
+                    kind="info"
+                    :title="$t('settings.worker_host_network_tradeoff')"
+                    :description="
+                      $t('settings.worker_host_network_tradeoff_description')
+                    "
                     :showCloseButton="false"
                   />
                   <h5 class="mg-bottom-sm">
@@ -662,8 +746,102 @@
                   <p class="mg-bottom">
                     {{ $t("settings.inspection_description") }}
                   </p>
+                  <NsToggle
+                    value="rspamdContainer"
+                    :label="$t('settings.rspamd_container')"
+                    v-model="form.rspamd_container"
+                    :disabled="busy"
+                    class="mg-bottom"
+                    ref="rspamd_container"
+                  >
+                    <template #tooltip>{{
+                      $t("settings.rspamd_container_tooltip")
+                    }}</template>
+                    <template slot="text-left">{{
+                      $t("settings.disabled")
+                    }}</template>
+                    <template slot="text-right">{{
+                      $t("settings.enabled")
+                    }}</template>
+                  </NsToggle>
+                  <template v-if="form.rspamd_container">
+                    <NsToggle
+                      value="rspamdWebui"
+                      :label="$t('settings.rspamd_webui')"
+                      v-model="form.rspamd_webui"
+                      :disabled="busy"
+                      class="mg-bottom"
+                      ref="rspamd_webui"
+                    >
+                      <template #tooltip>{{
+                        $t("settings.rspamd_webui_tooltip")
+                      }}</template>
+                      <template slot="text-left">{{
+                        $t("settings.disabled")
+                      }}</template>
+                      <template slot="text-right">{{
+                        $t("settings.enabled")
+                      }}</template>
+                    </NsToggle>
+                    <NsInlineNotification
+                      v-if="error.rspamd_webui"
+                      kind="error"
+                      :title="$t('settings.rspamd_webui')"
+                      :description="error.rspamd_webui"
+                      :showCloseButton="false"
+                    />
+                    <NsInlineNotification
+                      v-if="rspamdRoute.status === 'conflict'"
+                      kind="warning"
+                      :title="$t('settings.rspamd_webui')"
+                      :description="
+                        $t('settings.rspamd_route_conflict', {
+                          owner: rspamdRoute.owner,
+                        })
+                      "
+                      :showCloseButton="false"
+                    />
+                    <div v-if="rspamdWebuiActive" class="mg-bottom">
+                      <NsButton
+                        kind="ghost"
+                        :icon="Launch20"
+                        @click="openRspamd"
+                        >{{ $t("settings.open_rspamd") }}</NsButton
+                      >
+                      <p class="helper">
+                        {{ $t("settings.rspamd_webui_login") }}
+                      </p>
+                    </div>
+                  </template>
+                  <NsToggle
+                    value="clamavContainer"
+                    :label="$t('settings.clamav_container')"
+                    v-model="form.clamav_container"
+                    :disabled="busy"
+                    class="mg-bottom"
+                  >
+                    <template #tooltip>{{
+                      $t("settings.clamav_container_tooltip")
+                    }}</template>
+                    <template slot="text-left">{{
+                      $t("settings.disabled")
+                    }}</template>
+                    <template slot="text-right">{{
+                      $t("settings.enabled")
+                    }}</template>
+                  </NsToggle>
+                  <NsInlineNotification
+                    v-if="form.clamav_container"
+                    kind="warning"
+                    :title="$t('settings.clamav_memory')"
+                    :description="$t('settings.clamav_memory_description')"
+                    :showCloseButton="false"
+                  />
+                  <h5 class="mg-bottom-sm">
+                    {{ $t("settings.external_services") }}
+                  </h5>
                   <div
-                    v-for="svc in inspectionServices"
+                    v-for="svc in externalInspectionServices"
                     :key="svc"
                     class="mg-bottom"
                   >
@@ -898,6 +1076,11 @@ export default {
         rspamd_password: false,
       },
       oidcScopes: "openid, email",
+      smtpPort: "2525",
+      smtpPortChoices: [],
+      trackDomains: [],
+      savedRspamdWebui: false,
+      rspamdRoute: { status: "off", owner: "" },
       mxRecords: "",
       oidcPreset: "",
       oidcProviders: [],
@@ -961,6 +1144,35 @@ export default {
     ...mapState(["instanceName", "core", "appName"]),
     busy() {
       return this.loading.getConfiguration || this.loading.configureModule;
+    },
+    externalInspectionServices() {
+      return this.inspectionServices.filter(
+        (svc) => svc === "spamd" || !this.form[svc + "_container"]
+      );
+    },
+    rspamdWebuiActive() {
+      return this.savedRspamdWebui && this.form.rspamd_webui;
+    },
+    smtpPortOptions() {
+      const choices = this.smtpPortChoices.length
+        ? this.smtpPortChoices
+        : [{ port: 2525 }, { port: 25 }, { port: 587 }];
+      return choices.map((c) => ({
+        name: String(c.port),
+        value: String(c.port),
+        label: c.used_by
+          ? this.$t("settings.smtp_port_option_used", {
+              port: c.port,
+              module: c.used_by,
+            })
+          : this.$t("settings.smtp_port_option_" + c.port),
+      }));
+    },
+    smtpPortUsedBy() {
+      const choice = this.smtpPortChoices.find(
+        (c) => c.port === Number(this.form.smtp_port)
+      );
+      return choice ? choice.used_by : "";
     },
     sslModeOptions() {
       return ["Auto", "STARTTLS", "TLS", "None"].map((v) => ({
@@ -1027,6 +1239,24 @@ export default {
         `${this.dns.track_domain} IN CNAME ${host}`
       );
       return records;
+    },
+  },
+  watch: {
+    "form.rspamd_container"(value) {
+      if (value) {
+        this.$set(this.form, "rspamd_enabled", false);
+      } else {
+        this.$set(this.form, "rspamd_webui", false);
+      }
+    },
+    "form.clamav_container"(value) {
+      if (value) {
+        this.$set(this.form, "clamav_enabled", false);
+      }
+    },
+    smtpPort(value) {
+      const port = parseInt(value, 10);
+      this.$set(this.form, "smtp_port", isNaN(port) ? value : port);
     },
   },
   created() {
@@ -1098,6 +1328,9 @@ export default {
             "warnings",
             "configured",
             "smtp_hostname_effective",
+            "track_domains",
+            "smtp_port_choices",
+            "rspamd_webui_route",
           ].includes(key)
         ) {
           continue;
@@ -1109,6 +1342,14 @@ export default {
         key: this.relayKey++,
       }));
       this.form = form;
+      this.smtpPort = String(config.smtp_port);
+      this.smtpPortChoices = config.smtp_port_choices || [];
+      this.trackDomains = config.track_domains || [];
+      this.rspamdRoute = config.rspamd_webui_route || {
+        status: "off",
+        owner: "",
+      };
+      this.savedRspamdWebui = this.rspamdRoute.status === "published";
       for (const field of SECRET_FIELDS) {
         this.secretsSet[field] = !!config[field + "_set"];
         this.secrets[field] = "";
@@ -1176,6 +1417,19 @@ export default {
         this.form.oidc_identifier = "postal";
       }
       this.focusElement("oidc_issuer");
+    },
+    openRspamd() {
+      window.open(`https://${this.form.host}/rspamd/`, "_blank");
+    },
+    trackStatusKind(status) {
+      return (
+        {
+          obtained: "green",
+          pending: "high-contrast",
+          no_lets_encrypt: "gray",
+          used_by_another_route: "red",
+        }[status] || "gray"
+      );
     },
     addRelay() {
       this.form.smtp_relays.push({
@@ -1332,6 +1586,20 @@ export default {
 
 .helper {
   color: $text-02;
+}
+
+.mg-top-sm {
+  margin-top: $spacing-03;
+}
+
+.track-domain {
+  display: flex;
+  align-items: center;
+  gap: $spacing-03;
+}
+
+.track-name {
+  font-family: monospace;
 }
 
 .validation-error {

@@ -82,7 +82,7 @@ the fields of `configure-module` and of `get-configuration`.
 | Section | Fields | Postal option |
 |---|---|---|
 | Web interface | `host`, `lets_encrypt`, `http2https` | `postal.web_hostname` |
-| SMTP server | `smtp_hostname` (empty: `host`), `smtp_port`, `smtp_tls`, `max_message_size` (MB), `smtp_log_connections` | `postal.smtp_hostname`, `smtp_server.*` |
+| SMTP server | `smtp_hostname` (empty: `host`), `smtp_port` (2525, 25, 587 or another), `smtp_tls`, `max_message_size` (MB), `smtp_log_connections` | `postal.smtp_hostname`, `smtp_server.*` |
 | Delivery | `default_maximum_delivery_attempts`, `default_maximum_hold_expiry_days`, `default_suppression_list_automatic_removal_days`, `default_spam_threshold`, `default_spam_failure_threshold`, `helo_hostname`, `use_resent_sender_header` | `postal.*`, `dns.helo_hostname` |
 | IP pools | `use_ip_pools` | `POSTAL_USE_IP_POOLS` |
 | Relays | `smtp_relays` (`[{"host", "port", "ssl_mode": "Auto/STARTTLS/TLS/None"}]`), `relay_via_cluster_smarthost`, `cluster_relay_provider` | `POSTAL_SMTP_RELAYS` |
@@ -90,6 +90,7 @@ the fields of `configure-module` and of `get-configuration`.
 | OpenID Connect | `oidc_enabled`, `oidc_name`, `oidc_issuer`, `oidc_identifier`, `oidc_secret` (write-only), `oidc_scopes`, `oidc_uid_field`, `oidc_email_address_field`, `oidc_name_field`, `oidc_discovery`, `oidc_authorization_endpoint`, `oidc_token_endpoint`, `oidc_userinfo_endpoint`, `oidc_jwks_uri`, `oidc_local_authentication_enabled` | `OIDC_*` |
 | Spam and virus checks | `rspamd_enabled`, `rspamd_host`, `rspamd_port`, `rspamd_ssl`, `rspamd_password` (write-only), `spamd_enabled`, `spamd_host`, `spamd_port`, `clamav_enabled`, `clamav_host`, `clamav_port` | `rspamd.*`, `spamd.*`, `clamav.*` |
 | DNS names | `dns_mx_records`, `dns_spf_include`, `dns_return_path_domain`, `dns_route_domain`, `dns_track_domain` (empty: derived from `host`) | `dns.*` |
+| Optional containers | `worker_host_network`, `rspamd_container`, `rspamd_webui`, `clamav_container` | `rspamd.*`, `clamav.*` |
 | Performance and logs | `web_server_max_threads`, `worker_threads`, `main_db_pool_size`, `logging_enabled`, `smtp_log_connections`, `rails_log_enabled` | `web_server.*`, `worker.*`, `main_db.pool_size`, `logging.*` |
 
 Secrets are write-only: `get-configuration` returns `oidc_secret_set`,
@@ -144,13 +145,21 @@ the TLS certificate paths and `migration_waiter`.
 
 ### NS8 limits
 
-- **IP pools**: the containers run in a rootless pod. Postal binds the
-  source address of an IP pool for the outgoing connections, but the pod
-  network gives it only the primary address of the node (pasta) or a
-  private one (slirp4netns). Pools work with the address the pod can bind;
-  extra addresses of the node cannot be used, and a pool with such an
-  address makes the deliveries fail with a connection error. The Settings
-  page lists the node addresses for reference; the pools are created in the
+- **IP pools**: Postal binds the source address of an IP pool for the
+  outgoing connections. In the rootless pod (default) the network gives it
+  only the primary address of the node (pasta) or a private one
+  (slirp4netns): a pool with another address makes the deliveries fail
+  with a connection error. With `worker_host_network` the worker, which
+  delivers the messages, runs outside the pod with `--network=host`, still
+  rootless, and can bind every address of the node. It reaches MariaDB
+  through its unix socket (the `mysqld-run` volume), so no database port is
+  opened; the optional rspamd controller and ClamAV are published for it on
+  127.0.0.1 with the second and third TCP ports of the module (the
+  controller asks its password), its health server answers on `127.0.0.4`. **Tradeoff**: the worker then shares the loopback
+  interface of the node and can reach the services listening on its
+  127.0.0.1 (other modules); Postal still refuses webhooks to private and
+  loopback addresses unless `allowed_request_destinations` lists them. The
+  Settings page lists the node addresses; the pools are created in the
   Postal web interface.
 - **Relays**: Postal relays have no SMTP authentication. A relay, or the
   NS8 cluster smarthost used as relay, must accept the messages from the
@@ -173,13 +182,46 @@ the TLS certificate paths and `migration_waiter`.
 - **SMTP port**: port 25 and the other mail ports cannot be shared with the
   Mail, mailcow or KumoMTA modules of the same node; configure-module
   refuses a port they use.
-- **Track domain**: click and open tracking need the track domain routed to
-  the Postal web server; the module routes only `host` in Traefik.
-- **Spam and virus checks**: rspamd, SpamAssassin and ClamAV are not run by
-  the module: point Postal to existing services.
+- **Track domains**: every track domain of the Postal mail servers
+  (`<name>.<domain>`, a CNAME to the `dns_track_domain`) gets its own
+  Traefik route, `<module>-track-<name>`, with the `X-Postal-Track-Host`
+  header Postal expects and Let's Encrypt when `lets_encrypt` is on.
+  `postal-track-routes.timer` adds and removes them every 5 minutes, and
+  configure-module at once. A name already routed by another module is
+  skipped. The Settings page lists each name with its certificate status.
+- **Spam and virus checks**: `rspamd_container` (off by default) runs the
+  `postal-rspamd` image, built like the `mail-rspamd` image of ns8-mail
+  (Alpine, rspamd, two Redis backends, a local Unbound resolver), and
+  points Postal to it. Unlike ns8-mail it runs in the postal pod, not with
+  the network of the node: its ports 11332-11336 belong to the pod, so it
+  never conflicts with the rspamd of ns8-mail on the same node. Postal
+  scans on the normal worker (pod port 11333); the pod publishes the
+  controller on 127.0.0.1 only, on the second TCP port of the module
+  (installs older than this release get it from the node agent the first
+  time rspamd or ClamAV is enabled). `rspamd_webui` publishes its
+  web interface on `https://<host>/rspamd` like ns8-mail: Traefik
+  (`forward_auth`) asks the NS8 api-server to check the login of an NS8
+  administrator, then injects the controller password (`RSPAMD_adminpw`,
+  generated in `state/rspamd.env`, 0600, backed up). The login is the NS8
+  administrator one: nobody needs the rspamd password, and the controller
+  trusts no address. ns8-mail routes `/rspamd` on every host name; the
+  Postal route is scoped to the Postal host name, so both coexist. If
+  another route already serves `/rspamd` on the Postal host name, the route
+  is skipped and the Settings page reports it. `clamav_container` runs
+  ClamAV in the pod (off by default); it needs about 1 GB of memory and
+  downloads its signatures before it answers. The images are pulled with
+  the module even while the settings stay off. Without them, point Postal
+  to existing rspamd, SpamAssassin or ClamAV services.
 - Retention, message size per server, click and open tracking are settings
   of each Postal mail server, in the Postal web interface. Truemail is not
   part of Postal.
+
+### What a change restarts
+
+configure-module restarts only the containers that read a changed part of
+the configuration: an OIDC change restarts the web server, a spam check
+change the worker, a certificate the SMTP server. A new SMTP port creates
+the pod again (every container, MariaDB included), as do updates.
 
 ### Upgrading from an older release
 

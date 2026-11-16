@@ -7,17 +7,24 @@
 # The postal pod: MariaDB, the Postal web server, SMTP server and worker.
 # Traefik reaches the web server on 127.0.0.1:${TCP_PORT}; the SMTP server
 # (pod port 25) is published on ${POSTAL_SMTP_PORT} of every address of
-# the node, opened in the firewall by configure-module.
+# the node, opened in the firewall by configure-module. POSTAL_POD_PUBLISH
+# adds, on 127.0.0.1 and the second and third TCP ports of the module, the
+# rspamd controller and clamd of the optional containers (web UI,
+# host-network worker).
 #
 
+# The pod Wants its containers, they are BindsTo it: starting or stopping
+# the pod starts or stops them all, and a container restarts alone. With
+# Requires= a restart of one container would restart the whole pod.
 [Unit]
 Description=Podman postal.service
-Requires=mariadb-app.service postal-app.service postal-smtp-app.service postal-worker-app.service
-Before=mariadb-app.service postal-app.service postal-smtp-app.service postal-worker-app.service
+Wants=mariadb-app.service postal-app.service postal-smtp-app.service postal-worker-app.service rspamd-app.service clamav-app.service
+Before=mariadb-app.service postal-app.service postal-smtp-app.service postal-worker-app.service rspamd-app.service clamav-app.service
 
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n
 Environment=POSTAL_SMTP_PORT=2525
+Environment=POSTAL_POD_PUBLISH=
 EnvironmentFile=-%S/state/environment
 WorkingDirectory=%S/state
 Restart=always
@@ -29,6 +36,7 @@ ExecStartPre=/usr/bin/podman pod create --infra-conmon-pidfile %t/postal.pid \
     --name postal \
     --publish 127.0.0.1:${TCP_PORT}:5000 \
     --publish ${POSTAL_SMTP_PORT}:25 \
+    $POSTAL_POD_PUBLISH \
     --replace
 ExecStart=/usr/bin/podman pod start --pod-id-file %t/postal.pod-id
 ExecStop=/usr/bin/podman pod stop --ignore --pod-id-file %t/postal.pod-id -t 10

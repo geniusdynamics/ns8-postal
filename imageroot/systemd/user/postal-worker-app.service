@@ -5,15 +5,27 @@
 
 # Postal worker. postal.yml has no secrets; postal.env (0600) carries them as
 # environment variables, which Postal reads over postal.yml. The private
-# keys are podman secrets (bin/postal-secrets).
+# keys are podman secrets (bin/postal-secrets). The command is the one of
+# bin/postal, run without its bash wrapper: the Ruby process is PID 1 and
+# stops on SIGTERM instead of being killed after the stop timeout.
+#
+# POSTAL_WORKER_NETWORK_ARGS puts the worker in the pod (default) or, for
+# the IP pools of Postal, on the network of the node (--network=host): it
+# then binds any address of the node and reaches MariaDB by its unix
+# socket. postal-worker.env (0600) holds the addresses it then uses.
 
 [Unit]
 Description=Postal worker
 BindsTo=postal.service
 After=postal.service mariadb-app.service
+# Started once postal-db-init has created or migrated the schema: on an
+# empty database, Postal processes started meanwhile race with
+# "postal initialize" on the schema_migrations table
+ConditionPathExists=%S/state/.postal-db-ready
 
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n
+Environment=POSTAL_WORKER_NETWORK_ARGS=--pod=postal
 EnvironmentFile=%S/state/environment
 WorkingDirectory=%S/state
 Restart=always
@@ -24,11 +36,12 @@ ExecStartPre=/bin/rm -f %t/postal-worker-app.pid %t/postal-worker-app.ctr-id
 ExecStartPre=runagent postal-secrets postal-worker-app
 ExecStart=/usr/bin/podman run --conmon-pidfile %t/postal-worker-app.pid \
     --cidfile %t/postal-worker-app.ctr-id --cgroups=no-conmon \
-    --pod-id-file %t/postal.pod-id --replace -d --name postal-worker-app \
+    $POSTAL_WORKER_NETWORK_ARGS --replace -d --name postal-worker-app \
     --volume ./postal.yml:/config/postal.yml:z \
     --env-file postal.env \
+    --env-file postal-worker.env \
     --secret postal-worker-app-signing-key,type=mount,target=signing.key,uid=999,gid=999,mode=0400 \
-    ${POSTAL_IMAGE} postal worker
+    ${POSTAL_IMAGE} bundle exec ruby script/worker.rb
 ExecStartPost=runagent postal-wait-ready worker
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/postal-worker-app.ctr-id -t 10
 ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/postal-worker-app.ctr-id

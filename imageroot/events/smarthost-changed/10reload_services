@@ -20,9 +20,9 @@ settings = postal.load_settings()
 if not postal.depends_on_smarthost(settings):
     raise SystemExit(0)
 
-changed, warnings = postal.render(settings)
+affected, warnings = postal.render(settings, mark=False)
 for warning in warnings:
     postal.log(f"smarthost-changed warning: {warning}")
-if changed:
+if affected:
     agent.run_helper('systemctl', '--user', '-T', 'try-restart',
-                     'postal-app.service', 'postal-smtp-app.service', 'postal-worker-app.service')
+                     *[postal.UNITS[name] for name in sorted(affected)])

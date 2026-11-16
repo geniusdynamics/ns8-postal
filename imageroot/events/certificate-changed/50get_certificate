@@ -23,5 +23,5 @@ if not settings["smtp_tls"] or not name or not agent.certificate_event_matches(e
     sys.exit(0)  # ignore event if not relevant
 
 if postal.fetch_certificate(name):
-    postal.render(settings)  # TLS turns on with the first certificate
+    postal.render(settings, mark=False)  # TLS turns on with the first certificate
     agent.run_helper('systemctl', '--user', '-T', 'try-restart', 'postal-smtp-app.service')

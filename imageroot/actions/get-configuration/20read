@@ -47,6 +47,9 @@ config.update({
         "encrypt_smtp": sh["encrypt_smtp"],
     },
 })
+config["track_domains"] = postal.track_domain_status(settings)
+config["smtp_port_choices"] = postal.smtp_port_choices()
+config["rspamd_webui_route"] = postal.rspamd_route_status()
 try:
     with open(".configure-warnings.json") as fp:
         config["warnings"] = json.load(fp)

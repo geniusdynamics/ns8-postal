@@ -9,7 +9,7 @@
 # ExecStartPost of the units: the unit is started only once its service
 # answers.
 #
-# Usage: postal-wait-ready mariadb|web|smtp|worker [timeout seconds]
+# Usage: postal-wait-ready mariadb|web|smtp|worker|rspamd [timeout seconds]
 #
 
 import os
@@ -25,14 +25,8 @@ timeout = int(sys.argv[2]) if len(sys.argv) > 2 else 240
 
 
 def mariadb():
-    env = {}
-    with open("database.env") as fp:
-        for line in fp:
-            if "=" in line:
-                key, value = line.rstrip("\n").split("=", 1)
-                env[key] = value
-    subprocess.run(["podman", "exec", "-e", "MYSQL_PWD=" + env["MARIADB_ROOT_PASSWORD"], "mariadb-app",
-                    "mariadb-admin", "ping", "-h", "127.0.0.1", "-u", "root", "--silent"],
+    # postal-mariadb: the password stays in the container
+    subprocess.run(["postal-mariadb", "mariadb-admin", "ping", "-h", "127.0.0.1", "-u", "root", "--silent"],
                    check=True, capture_output=True, timeout=20)
 
 
@@ -62,11 +56,20 @@ def smtp():
 
 
 def worker():
+    import postal_ns8 as postal
     subprocess.run(["podman", "exec", "postal-worker-app", "curl", "-sf", "-o", "/dev/null",
-                    "http://127.0.0.1:9090/health"], check=True, capture_output=True, timeout=20)
+                    postal.worker_health_url()], check=True, capture_output=True, timeout=20)
 
 
-check = {"mariadb": mariadb, "web": web, "smtp": smtp, "worker": worker}[component]
+def rspamd():
+    # The unauthenticated /ping of the controller, published by the pod
+    import postal_ns8 as postal
+    with urllib.request.urlopen(postal.rspamd_url() + "/ping", timeout=10) as resp:
+        if b"pong" not in resp.read():
+            raise RuntimeError("no pong")
+
+
+check = {"mariadb": mariadb, "web": web, "smtp": smtp, "worker": worker, "rspamd": rspamd}[component]
 deadline = time.time() + timeout
 last = None
 while time.time() < deadline:
@@ -74,9 +77,17 @@ while time.time() < deadline:
         check()
         sys.exit(0)
     except Exception as ex:
-        if str(ex) != last:
-            print(f"{component} not ready yet: {ex}", file=sys.stderr)
-            last = str(ex)
+        # A short reason only: the text of a failed command can carry
+        # its arguments
+        if isinstance(ex, subprocess.CalledProcessError):
+            reason = f"exit code {ex.returncode}"
+        elif isinstance(ex, subprocess.TimeoutExpired):
+            reason = "timeout"
+        else:
+            reason = type(ex).__name__
+        if reason != last:
+            print(f"{component} not ready yet: {reason}", file=sys.stderr)
+            last = reason
         time.sleep(3)
 print(f"{component} did not become ready in {timeout} seconds", file=sys.stderr)
 sys.exit(1)

@@ -6,15 +6,25 @@
 #
 
 # Close the SMTP port, withdraw the smarthost provider key and the podman
-# secrets. ns8-traefik drops the web route on the module-removed event.
+# secrets and the rspamd web interface route. ns8-traefik drops the web
+# route on the module-removed event.
 
 import json
 import os
 import subprocess
 import sys
 import agent
+import agent.tasks
 
 agent.remove_public_service(os.environ['MODULE_ID'])
+
+# The rspamd web interface route, like ns8-mail (ns8-traefik also drops
+# the routes named after the module on module-removed)
+traefik_id = agent.resolve_agent_id('traefik@node')
+if traefik_id:
+    agent.tasks.run(agent_id=traefik_id, action='delete-route',
+                    data={'instance': os.environ['MODULE_ID'] + '-rspamd'},
+                    extra={'isNotificationHidden': True})
 
 try:
     with agent.redis_connect(privileged=True) as prdb:
