@@ -25,6 +25,7 @@ the TLS key reach them as podman secrets (bin/postal-secrets), owned by
 """
 
 import copy
+import errno
 import ipaddress
 import json
 import os
@@ -931,10 +932,29 @@ def take_restart_set():
 
 
 def port_in_use(port):
-    try:
-        return agent.tcp_port_in_use(int(port))
-    except OSError:
-        return False  # e.g. no IPv6 on the node
+    """True if a socket of the node listens on, or is bound to, the TCP
+    port. Unlike agent.tcp_port_in_use(), SO_REUSEADDR ignores the
+    connections in TIME_WAIT: a port that served SMTP sessions a minute
+    ago (e.g. an instance just removed) is free."""
+    import socket
+    for family in (socket.AF_INET, socket.AF_INET6):
+        try:
+            sock = socket.socket(family, socket.SOCK_STREAM)
+        except OSError:
+            continue  # e.g. no IPv6 on the node
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if family == socket.AF_INET6:
+                sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            sock.bind(("", int(port)))
+        except OSError as ex:
+            if ex.errno == errno.EADDRINUSE:
+                return True
+            if family == socket.AF_INET:
+                raise
+        finally:
+            sock.close()
+    return False
 
 
 # --------------------------------------------------------------------------

@@ -25,14 +25,8 @@ timeout = int(sys.argv[2]) if len(sys.argv) > 2 else 240
 
 
 def mariadb():
-    env = {}
-    with open("database.env") as fp:
-        for line in fp:
-            if "=" in line:
-                key, value = line.rstrip("\n").split("=", 1)
-                env[key] = value
-    subprocess.run(["podman", "exec", "-e", "MYSQL_PWD=" + env["MARIADB_ROOT_PASSWORD"], "mariadb-app",
-                    "mariadb-admin", "ping", "-h", "127.0.0.1", "-u", "root", "--silent"],
+    # postal-mariadb: the password stays in the container
+    subprocess.run(["postal-mariadb", "mariadb-admin", "ping", "-h", "127.0.0.1", "-u", "root", "--silent"],
                    check=True, capture_output=True, timeout=20)
 
 
@@ -83,9 +77,17 @@ while time.time() < deadline:
         check()
         sys.exit(0)
     except Exception as ex:
-        if str(ex) != last:
-            print(f"{component} not ready yet: {ex}", file=sys.stderr)
-            last = str(ex)
+        # A short reason only: the text of a failed command can carry
+        # its arguments
+        if isinstance(ex, subprocess.CalledProcessError):
+            reason = f"exit code {ex.returncode}"
+        elif isinstance(ex, subprocess.TimeoutExpired):
+            reason = "timeout"
+        else:
+            reason = type(ex).__name__
+        if reason != last:
+            print(f"{component} not ready yet: {reason}", file=sys.stderr)
+            last = reason
         time.sleep(3)
 print(f"{component} did not become ready in {timeout} seconds", file=sys.stderr)
 sys.exit(1)

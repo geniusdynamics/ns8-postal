@@ -1,0 +1,18 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+#
+# Run a MariaDB client (mariadb, mariadb-admin, mariadb-dump...) in the
+# mariadb-app container as root. The password never appears in a command
+# line: the container reads it from its own environment (database.env,
+# --env-file of mariadb-app.service) and gives it to the client as
+# MYSQL_PWD. Standard input and output pass through.
+#
+# Usage: postal-mariadb <client> [arguments...]
+#
+
+exec podman exec -i mariadb-app sh -c 'export MYSQL_PWD="${MARIADB_ROOT_PASSWORD}"; exec "$@"' postal-mariadb "$@"

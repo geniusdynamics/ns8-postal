@@ -13,6 +13,10 @@
 Description=Postal SMTP server
 BindsTo=postal.service
 After=postal.service mariadb-app.service
+# Started once postal-db-init has created or migrated the schema: on an
+# empty database, Postal processes started meanwhile race with
+# "postal initialize" on the schema_migrations table
+ConditionPathExists=%S/state/.postal-db-ready
 
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n

@@ -26,6 +26,10 @@ if not os.path.exists(postal.SETTINGS_FILE):
     sys.exit(0)  # not configured yet
 
 settings = postal.coerce(postal.load_settings())
+
+# A configured instance has its schema: its Postal processes may start
+# with the pod (20restart runs the migrations of the new image first)
+postal.write_file(".postal-db-ready", "", 0o644)
 postal.save_settings(settings)
 agent.set_env("POSTAL_SMTP_PORT", settings["smtp_port"])
 agent.set_env("POSTAL_SMTP_HOSTNAME", postal.smtp_hostname(settings))

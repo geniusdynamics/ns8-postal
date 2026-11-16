@@ -19,12 +19,9 @@ if ! systemctl --user -q is-active mariadb-app.service; then
 	exit 0
 fi
 
-set -a
-source ./database.env
-set +a
-
-prefix="${MARIADB_DATABASE:-postal}"
-mapfile -t databases < <(podman exec -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" mariadb-app \
+prefix=$(sed -n 's/^MARIADB_DATABASE=//p' database.env)
+prefix="${prefix:-postal}"
+mapfile -t databases < <(postal-mariadb \
 	mariadb -h 127.0.0.1 -u root -N -B \
 	-e "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '${prefix}' OR schema_name LIKE '${prefix}-server-%'")
 
@@ -34,7 +31,7 @@ if [[ ${#databases[@]} -eq 0 ]]; then
 fi
 
 echo "Dumping databases: ${databases[*]}"
-podman exec -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" mariadb-app mariadb-dump \
+postal-mariadb mariadb-dump \
 	-h 127.0.0.1 -u root \
 	--databases "${databases[@]}" \
 	--default-character-set=utf8mb4 \
