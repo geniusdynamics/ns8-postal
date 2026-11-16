@@ -39,7 +39,7 @@ Started at of containers
 Run Postal SQL
     [Arguments]    ${sql}
     ${b64} =    Evaluate    base64.b64encode($sql.encode()).decode()    modules=base64
-    ${out}    ${err}    ${rc} =    Execute Command    echo ${b64} | base64 -d | runagent -m ${module_id} bash -c 'source database.env; podman exec -i -e MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb-app mariadb -h 127.0.0.1 -u root postal'
+    ${out}    ${err}    ${rc} =    Execute Command    echo ${b64} | base64 -d | runagent -m ${module_id} postal-mariadb mariadb -h 127.0.0.1 -u root postal
     ...    return_rc=True    return_stderr=True
     Should Be Equal As Integers    ${rc}    0    ${err}
 

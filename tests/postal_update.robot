@@ -19,7 +19,7 @@ Run on module
 Postal SQL value
     [Arguments]    ${query}
     ${b64} =    Evaluate    base64.b64encode($query.encode()).decode()    modules=base64
-    ${out}    ${err}    ${rc} =    Execute Command    echo ${b64} | base64 -d | runagent -m ${module_id} bash -c 'source database.env; podman exec -i -e MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb-app mariadb -h 127.0.0.1 -u root -N -B postal'
+    ${out}    ${err}    ${rc} =    Execute Command    echo ${b64} | base64 -d | runagent -m ${module_id} postal-mariadb mariadb -h 127.0.0.1 -u root -N -B postal
     ...    return_rc=True    return_stderr=True
     Should Be Equal As Integers    ${rc}    0    ${err}
     RETURN    ${out.strip()}
@@ -56,8 +56,17 @@ Update scenario
     ELSE
         ${payload} =    Set Variable    {"host":"${HOST}","http2https":true,"lets_encrypt":false,"from_name":"Upgrade Sender","from_address":"sender@example.org","default_spam_threshold":7,"default_maximum_delivery_attempts":9,"oidc_enabled":true,"oidc_issuer":"https://sso.example.org/realms/up","oidc_identifier":"postal","oidc_secret":"${OIDC_SECRET}"}
     END
+    # The first start of the released versions races with the creation of
+    # the schema (fixed by this branch: .postal-db-ready): a second
+    # configuration, on the created schema, succeeds
     ${out}    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${payload}'
     ...    return_rc=True
+    IF    ${rc} != 0
+        Log    configure-module of ${release} failed once (${rc}): retrying    console=${True}
+        Sleep    20s
+        ${out}    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${payload}'
+        ...    return_rc=True
+    END
     Should Be Equal As Integers    ${rc}    0    configure-module of ${release} failed: ${out}
     Web answers
     # Data: a user, an organization and a mail server (with its message database)

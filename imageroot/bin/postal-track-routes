@@ -40,8 +40,8 @@ def track_domains():
     query = ("SELECT CONCAT(t.name, '.', d.name), IFNULL(t.ssl_enabled, 1) FROM track_domains t "
              "JOIN domains d ON d.id = t.domain_id")
     proc = subprocess.run(
-        ["podman", "exec", "-e", "MYSQL_PWD=" + db.get("MARIADB_ROOT_PASSWORD", ""), "mariadb-app",
-         "mariadb", "-h", "127.0.0.1", "-u", "root", "-N", "-B", db.get("MARIADB_DATABASE", "postal"), "-e", query],
+        ["postal-mariadb", "mariadb", "-h", "127.0.0.1", "-u", "root", "-N", "-B",
+         db.get("MARIADB_DATABASE", "postal"), "-e", query],
         capture_output=True, text=True)
     if proc.returncode != 0:
         return None
