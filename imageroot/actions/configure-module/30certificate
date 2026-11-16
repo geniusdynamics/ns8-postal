@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# STARTTLS certificate of the SMTP server (state/tls), like ns8-mail and
+# ns8-kumomta: the Traefik certificate of the SMTP host name. Until
+# Traefik has one, a self-signed certificate is written a self-signed certificate; the
+# certificate-changed event replaces it.
+
+import os
+import agent
+import agent.tasks
+import postal_ns8 as postal
+
+settings = postal.load_settings()
+if not settings["smtp_tls"]:
+    raise SystemExit(0)
+
+name = postal.smtp_hostname(settings)
+if settings["lets_encrypt"] and name != settings["host"]:
+    # The web route requests the certificate of the host; request the one
+    # of the SMTP host name in the background: the DNS may not be ready
+    traefik_id = agent.resolve_agent_id('traefik@node')
+    if traefik_id:
+        agent.tasks.run_nowait(
+            agent_id=traefik_id,
+            action='set-certificate',
+            data={"fqdn": name},
+            parent='',
+            extra={'title': 'set-certificate', 'isNotificationHidden': False},
+        )
+
+os.makedirs(postal.TLS_DIR, mode=0o700, exist_ok=True)
+previous = ""
+if os.path.exists(".tls-hostname"):
+    with open(".tls-hostname") as fp:
+        previous = fp.read().strip()
+if previous != name:
+    # Another host name: drop the old certificate
+    for path in (postal.TLS_CERT, postal.TLS_KEY):
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+postal.fetch_certificate(name)
+postal.write_file(".tls-hostname", name + "\n")

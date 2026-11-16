@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Render postal.yml (no secrets) and postal.env (0600, the secrets as
+# environment variables, which Postal reads over postal.yml)
+
+import json
+import postal_ns8 as postal
+
+changed, warnings = postal.render(postal.load_settings())
+for warning in warnings:
+    postal.log(f"configure-module warning: {warning}")
+postal.write_file(".configure-warnings.json", json.dumps(warnings) + "\n", 0o644)

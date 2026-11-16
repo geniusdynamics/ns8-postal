@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# The OpenID Connect providers among the NS8 modules of the cluster
+# (Keycloak, authentik, ZITADEL), with an issuer URL hint, for the presets
+# of the OIDC settings. Read-only: no secrets.
+
+import json
+import sys
+import agent
+import postal_ns8 as postal
+
+try:
+    providers = postal.oidc_providers()
+except Exception as ex:
+    print(agent.SD_WARNING + f"Cannot list the OIDC providers: {ex}", file=sys.stderr)
+    providers = []
+json.dump({"providers": providers}, fp=sys.stdout)

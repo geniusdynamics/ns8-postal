@@ -47,27 +47,149 @@ Configure your Postal instance (assuming instance name is `postal1`):
 ```bash
 api-cli run configure-module --agent module/postal1 --data - <<EOF
 {
-  "host": "mail.yourdomain.com",
+  "host": "postal.yourdomain.com",
   "http2https": true,
   "lets_encrypt": true
 }
 EOF
 ```
 
-#### Configuration Parameters
+`host` is the only required field. Every other setting keeps its current
+value when it is left out, so a request can change a single setting:
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `host` | string | ✅ | Fully qualified domain name (e.g., `mail.example.com`) |
-| `http2https` | boolean | ✅ | Force HTTPS redirection |
-| `lets_encrypt` | boolean | ✅ | Enable Let's Encrypt SSL certificate |
+```bash
+api-cli run configure-module --agent module/postal1 --data '{"host": "postal.yourdomain.com", "default_spam_threshold": 6}'
+```
 
-### Access Your Mail Server
+Then create the first Postal administrator:
 
-After configuration, Postal will be available at:
-- **Web Interface**: `https://your-configured-host`
-- **SMTP**: Port 2525
-- **IMAP**: Port 2143
+```bash
+runagent -m postal1 podman exec -it postal-app postal make-user
+```
+
+### Access
+
+- **Web interface**: `https://<host>`, HTTPS only (Traefik terminates TLS)
+- **SMTP**: the `smtp_port` of the node (default `2525`, use `25` to receive
+  mail from the Internet), opened in the node firewall. STARTTLS uses the
+  Traefik certificate of the SMTP host name.
+
+## ⚙️ Settings
+
+The Settings page of the module sets the options below; the same names are
+the fields of `configure-module` and of `get-configuration`.
+
+| Section | Fields | Postal option |
+|---|---|---|
+| Web interface | `host`, `lets_encrypt`, `http2https` | `postal.web_hostname` |
+| SMTP server | `smtp_hostname` (empty: `host`), `smtp_port`, `smtp_tls`, `max_message_size` (MB), `smtp_log_connections` | `postal.smtp_hostname`, `smtp_server.*` |
+| Delivery | `default_maximum_delivery_attempts`, `default_maximum_hold_expiry_days`, `default_suppression_list_automatic_removal_days`, `default_spam_threshold`, `default_spam_failure_threshold`, `helo_hostname`, `use_resent_sender_header` | `postal.*`, `dns.helo_hostname` |
+| IP pools | `use_ip_pools` | `POSTAL_USE_IP_POOLS` |
+| Relays | `smtp_relays` (`[{"host", "port", "ssl_mode": "Auto/STARTTLS/TLS/None"}]`), `relay_via_cluster_smarthost`, `cluster_relay_provider` | `POSTAL_SMTP_RELAYS` |
+| E-mails of Postal | `app_smtp_mode` (`smarthost`: the NS8 cluster smarthost, or `custom`), `app_smtp_host`, `app_smtp_port`, `app_smtp_username`, `app_smtp_password` (write-only), `app_smtp_tls`, `app_smtp_tls_verify`, `from_name`, `from_address` | `smtp.*` |
+| OpenID Connect | `oidc_enabled`, `oidc_name`, `oidc_issuer`, `oidc_identifier`, `oidc_secret` (write-only), `oidc_scopes`, `oidc_uid_field`, `oidc_email_address_field`, `oidc_name_field`, `oidc_discovery`, `oidc_authorization_endpoint`, `oidc_token_endpoint`, `oidc_userinfo_endpoint`, `oidc_jwks_uri`, `oidc_local_authentication_enabled` | `OIDC_*` |
+| Spam and virus checks | `rspamd_enabled`, `rspamd_host`, `rspamd_port`, `rspamd_ssl`, `rspamd_password` (write-only), `spamd_enabled`, `spamd_host`, `spamd_port`, `clamav_enabled`, `clamav_host`, `clamav_port` | `rspamd.*`, `spamd.*`, `clamav.*` |
+| DNS names | `dns_mx_records`, `dns_spf_include`, `dns_return_path_domain`, `dns_route_domain`, `dns_track_domain` (empty: derived from `host`) | `dns.*` |
+| Performance and logs | `web_server_max_threads`, `worker_threads`, `main_db_pool_size`, `logging_enabled`, `smtp_log_connections`, `rails_log_enabled` | `web_server.*`, `worker.*`, `main_db.pool_size`, `logging.*` |
+
+Secrets are write-only: `get-configuration` returns `oidc_secret_set`,
+`app_smtp_password_set`, `rspamd_password_set` and `sentry_dsn_set`
+instead of the values. They are stored in `state/secrets/secrets.env` (mode
+0600) and reach the containers through `postal.env` (0600) as environment
+variables, never through the module environment (Redis) or `postal.yml`.
+The signing key and the TLS key reach the containers as podman secrets.
+
+### CLI-only options
+
+These options have no field on the Settings page; set them with
+`configure-module`:
+
+| Field | Postal option | Example |
+|---|---|---|
+| `trusted_proxies` | `postal.trusted_proxies` | `["10.0.0.0/8"]` |
+| `allowed_request_destinations` | `postal.allowed_request_destinations` (webhooks to private addresses) | `["10.5.4.0/24", "hooks.lan"]` |
+| `use_local_ns_for_domain_verification` | `postal.use_local_ns_for_domain_verification` | `true` |
+| `batch_queued_messages`, `queued_message_lock_stale_days` | `postal.*` | `true`, `1` |
+| `smtp_client_open_timeout`, `smtp_client_read_timeout` | `smtp_client.*` (seconds) | `30` |
+| `dns_dkim_identifier`, `dns_custom_return_path_prefix`, `dns_domain_verify_prefix` | `dns.*` | `"postal"` |
+| `rspamd_flags` | `rspamd.flags` | `"..."` |
+| `gelf_host`, `gelf_port`, `gelf_facility` | `gelf.*` (logs to Graylog) | `"graylog.lan"` |
+| `sentry_dsn` (write-only) | `logging.sentry_dsn` | `"https://..."` |
+
+```bash
+api-cli run configure-module --agent module/postal1 --data - <<EOF
+{
+  "host": "postal.yourdomain.com",
+  "allowed_request_destinations": ["10.5.4.0/24"],
+  "gelf_host": "graylog.yourdomain.com",
+  "smtp_relays": [{"host": "relay.yourdomain.com", "port": 587, "ssl_mode": "STARTTLS"}]
+}
+EOF
+```
+
+Read the generated configuration (no secrets) with:
+
+```bash
+runagent -m postal1 podman exec postal-app cat /config/postal.yml
+```
+
+### Set by the module
+
+`web_protocol` (https), the web server bind address and port (pod port
+5000, published on `127.0.0.1:${TCP_PORT}` for Traefik), the SMTP server
+port inside the pod (25), the health server ports, the MariaDB connection
+(`main_db.*`, `message_db.*`, root credentials of the pod database),
+`rails.environment` (production), `rails.secret_key`, `signing_key_path`,
+the TLS certificate paths and `migration_waiter`.
+
+### NS8 limits
+
+- **IP pools**: the containers run in a rootless pod. Postal binds the
+  source address of an IP pool for the outgoing connections, but the pod
+  network gives it only the primary address of the node (pasta) or a
+  private one (slirp4netns). Pools work with the address the pod can bind;
+  extra addresses of the node cannot be used, and a pool with such an
+  address makes the deliveries fail with a connection error. The Settings
+  page lists the node addresses for reference; the pools are created in the
+  Postal web interface.
+- **Relays**: Postal relays have no SMTP authentication. A relay, or the
+  NS8 cluster smarthost used as relay, must accept the messages from the
+  address of the node. An authenticated cluster smarthost is refused as
+  relay; it can still send the e-mails of Postal itself
+  (`app_smtp_mode: smarthost`), which support authentication but not
+  implicit TLS (port 465). Postal 3.3 spells its STARTTLS relay mode
+  `STARTLS`: the module writes that spelling in `postal.yml` for the
+  `STARTTLS` mode, otherwise Postal would send without encryption.
+- **Cluster smarthost provider**: with `cluster_relay_provider`, Postal is
+  listed in the NS8 Email notifications settings. NS8 sends to port 25
+  without authentication, so it requires `smtp_port: 25` and an "SMTP-IP"
+  credential for the cluster network in a Postal mail server.
+- **OIDC**: register `https://<host>/auth/oidc/callback` as redirect URI in
+  the provider. The Settings page offers the Keycloak, authentik and ZITADEL
+  modules of the cluster as presets: complete the issuer with the realm or
+  application. With discovery, Postal must reach the issuer over HTTPS with
+  a trusted certificate. Local logins can be disabled only while OIDC is
+  enabled.
+- **SMTP port**: port 25 and the other mail ports cannot be shared with the
+  Mail, mailcow or KumoMTA modules of the same node; configure-module
+  refuses a port they use.
+- **Track domain**: click and open tracking need the track domain routed to
+  the Postal web server; the module routes only `host` in Traefik.
+- **Spam and virus checks**: rspamd, SpamAssassin and ClamAV are not run by
+  the module: point Postal to existing services.
+- Retention, message size per server, click and open tracking are settings
+  of each Postal mail server, in the Postal web interface. Truemail is not
+  part of Postal.
+
+### Upgrading from an older release
+
+The update keeps every value and moves the instance to the current layout:
+`settings.json`, the secrets in `secrets/` (the Rails secret key and the
+signing key are kept), the credentials of the e-mails of Postal. Older
+releases ran Postal in the Rails `test` environment, where e-mails are not
+sent and CSRF protection is off: the update switches to `production`.
+Caddy, unused, is removed. The schema migrations of a new Postal image run
+with `postal upgrade` on every update.
 
 ## 🔧 Management Commands
 
@@ -100,39 +222,38 @@ remove-module --no-preserve postal1
 The module deploys the following containerized services:
 
 - **postal-app**: Main Postal application server
-- **postal-smtp-app**: SMTP service for sending emails
+- **postal-smtp-app**: SMTP server, receives messages and incoming mail
 - **postal-worker-app**: Background worker for processing tasks
 - **mariadb-app**: Database backend
-- **caddy-app**: Web server and reverse proxy
 
 ### Network Configuration
 
-- **Port 5000**: Internal web interface (proxied through Traefik)
-- **Port 2525**: SMTP service
-- **Port 2143**: IMAP service
+- **Port 5000** of the pod: web interface, published on `127.0.0.1:${TCP_PORT}` for Traefik
+- **Port 25** of the pod: SMTP server, published on `smtp_port` of the node (default 2525)
 
-### Data Persistence
+### Backup
 
-Persistent data is stored in:
-- Database files and configurations
-- Mail queues and logs
-- SSL certificates (if Let's Encrypt is enabled)
+The backup holds `settings.json`, `secrets/` (signing key, Rails secret key,
+write-only secrets), `database.env` and `postal.sql`, a dump of every Postal
+database (the main one and the message database of each mail server).
+Restore and clone apply every setting again, with Let's Encrypt off: enable
+it again once the DNS points to the node.
 
 ## 🔍 Advanced Configuration
 
 ### Smarthost Integration
 
-Postal automatically integrates with NethServer 8's [smarthost configuration](https://nethserver.github.io/ns8-core/core/smarthost/):
+Postal follows the NS8 [smarthost configuration](https://nethserver.github.io/ns8-core/core/smarthost/):
+with `app_smtp_mode: smarthost` (the default) it sends its own e-mails
+through it, and with `relay_via_cluster_smarthost` all the outgoing mail.
+The `smarthost-changed` event renders the configuration again.
 
-- Configuration is discovered from Redis keys
-- The `bin/discover-smarthost` script refreshes settings on startup
-- Changes are automatically applied via event handlers
+### Configuration files
 
-### Custom Configuration Files
-
-Key configuration templates:
-- `imageroot/templates/postal.yml.j2` - Main Postal configuration
-- `imageroot/templates/Caddyfile.j2` - Web server configuration
+`configure-module` renders `state/postal.yml` (no secrets) and
+`state/postal.env` (0600, secrets as environment variables) from
+`state/settings.json`, in `imageroot/pypkg/postal_ns8.py`. Do not edit them:
+changes are lost.
 
 ## 🛠️ Development & Debugging
 
@@ -165,20 +286,19 @@ Key configuration templates:
    ```
 
    Inside the container, you can run:
-   - **Initialize Postal:**
-     ```bash
-     postal initialize
-     ```
+   - **Create or migrate the database** (never run `postal initialize` on
+     a database in use: it replaces the tables). Outside the container:
+     `api-cli run module/postal1/initialize-postal`
    - **Create a new user:**
      ```bash
      postal make-user
      ```
    - **View configuration:**
      ```bash
-     cat config/postal.yml
+     cat /config/postal.yml
      ```
 
-6. **Inspect container environment:**
+6. **Inspect container environment** (prints the secrets of `postal.env`):
    ```bash
    podman exec postal-app env
    ```
@@ -190,7 +310,7 @@ Key configuration templates:
 
    Check specific configurations with:
    ```bash
-   cat config/postal.yml
+   cat /config/postal.yml
    ```
 
    These commands are essential for debugging and managing the Postal instance effectively.

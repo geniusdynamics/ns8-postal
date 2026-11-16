@@ -38,19 +38,18 @@ buildah run \
 # Add imageroot directory to the container image
 buildah add "${container}" imageroot /imageroot
 buildah add "${container}" ui/dist /ui
-# Setup the entrypoint, ask to reserve one TCP port with the label and set a rootless container
-# Select you image(s) with the label org.nethserver.images
-# ghcr.io/xxxxx is the GitHub container registry or your own registry or docker.io for Docker Hub
-# The image tag is set to latest by default, but can be overridden with the IMAGETAG environment variable
-# --label="org.nethserver.images=docker.io/mariadb:10.11.5 docker.io/roundcube/roundcubemail:1.6.4-apache"
-# rootfull=0 === rootless container
-# tcp-ports-demand=1 number of tcp Port to reserve , 1 is the minimum, can be udp or tcp
+# Labels:
+# - traefik@node:fulladm: web route, and the certificate of the SMTP host
+#   name for STARTTLS (get-certificate, set-certificate)
+# - node:fwadm: open the SMTP port of the pod on the node firewall
+# - one TCP port: the web interface, published on 127.0.0.1 for Traefik
+# - images: Postal and MariaDB, pinned versions tracked by Renovate
 buildah config --entrypoint=/ \
-	--label="org.nethserver.authorizations=traefik@node:routeadm" \
+	--label="org.nethserver.authorizations=traefik@node:fulladm node:fwadm" \
 	--label="org.nethserver.tcp-ports-demand=1" \
 	--label="org.nethserver.rootfull=0" \
-    --label="org.nethserver.min-core=3.0.0" \
-	--label="org.nethserver.images=ghcr.io/postalserver/postal:3.3.7 docker.io/mariadb:13.0.2 docker.io/caddy:2.11.9 " \
+	--label="org.nethserver.min-core=3.0.0" \
+	--label="org.nethserver.images=ghcr.io/postalserver/postal:3.3.7 docker.io/mariadb:13.0.2" \
 	"${container}"
 # Commit the image
 buildah commit "${container}" "${repobase}/${reponame}"

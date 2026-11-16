@@ -5,11 +5,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-# If the control reaches this step, the service can be enabled and started
+# Restart a running instance: postal-restart also runs the Postal schema
+# migrations of the new image ("postal upgrade")
 
 set -e
 
 # Redirect any output to the journal (stderr)
 exec 1>&2
 
-systemctl --user try-restart postal.service
+postal-restart --if-active

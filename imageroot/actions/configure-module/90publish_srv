@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Smarthost provider of the cluster. The core "Email notifications"
+# settings (cluster get-smarthost) list the modules publishing
+# module/<id>/srv/tcp/submission and configure the chosen one with its
+# host, port 25, no TLS and no authentication. Postal accepts such
+# messages only from the addresses of an "SMTP-IP" credential of a Postal
+# mail server: the administrator creates one for the cluster network.
+
+import json
+import os
+import agent
+import postal_ns8 as postal
+
+settings = postal.load_settings()
+agent_id = os.environ['AGENT_ID']
+key = agent_id + "/srv/tcp/submission"
+_, node_address = postal.cluster_info()
+
+with agent.redis_connect(privileged=True) as prdb:
+    trx = prdb.pipeline()
+    trx.delete(key)
+    if settings["cluster_relay_provider"] and settings["smtp_port"] == 25 and node_address:
+        trx.hset(key, mapping={
+            "host": node_address,
+            "port": "25",
+            "node": os.environ['NODE_ID'],
+            "module_uuid": os.environ.get('MODULE_UUID', ''),
+            "mail_hostname": postal.smtp_hostname(settings),
+            "relay_only": "1",
+        })
+    trx.publish(agent_id + "/event/submission-changed", json.dumps({
+        "module_id": os.environ['MODULE_ID'],
+        "module_uuid": os.environ.get('MODULE_UUID', ''),
+        "node_id": int(os.environ['NODE_ID']),
+    }))
+    trx.execute()
