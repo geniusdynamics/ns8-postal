@@ -4,7 +4,7 @@
 #
 
 # Optional ClamAV of the pod, used by Postal to scan the messages (clamd
-# 127.0.0.1:3310 in the pod, 127.0.0.3:${TCP_PORT} for the host-network
+# 127.0.0.1:3310 in the pod, 127.0.0.1:<third TCP port> for the host-network
 # worker). It needs about 1 GB of memory, and downloads its signatures
 # (freshclam) before clamd answers: the unit does not wait for it. Started
 # only while the clamav_container setting is on (.clamav-enabled).

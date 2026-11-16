@@ -8,6 +8,8 @@ ${HOST}           postal.example.org
 ${OIDC_SECRET}    T3st-OIDC-Secr3t-Value
 ${SMTP_PORT}      2525
 ${TRACK_PARENT}   example.net
+${ADMIN_USER}     admin
+${ADMIN_PASSWORD}    Nethesis,1234
 ${TRACK_HOST}     click.example.net
 
 *** Keywords ***
@@ -251,25 +253,30 @@ Run rspamd in the pod with its web interface
     ${out} =    Get configuration
     &{conf} =    Evaluate    json.loads($out)    modules=json
     Should Be True    ${conf.rspamd_container}
-    Should Not Contain    ${out}    CONTROLLER_PASSWORD
+    Should Be Equal    ${conf.rspamd_webui_route['status']}    published
+    ${adminpw} =    Execute Command    runagent -m ${module_id} bash -c 'source rspamd.env; echo -n "$RSPAMD_adminpw"'
+    Should Not Be Empty    ${adminpw}
+    Should Not Contain    ${out}    ${adminpw}
+    ${mode} =    Execute Command    runagent -m ${module_id} stat -c '%a' rspamd.env
+    Should Be Equal    ${mode.strip()}    600
     # The worker, on the network of the node, reaches the rspamd controller
-    ${out}    ${rc} =    Execute Command    runagent -m ${module_id} bash -c 'podman exec postal-worker-app curl -s http://127.0.0.2:$TCP_PORT/ping'
+    ${out}    ${rc} =    Execute Command    runagent -m ${module_id} bash -c 'podman exec postal-worker-app curl -s http://127.0.0.1:$(echo $TCP_PORTS | cut -d, -f2)/ping'
     ...    return_rc=True
     Should Be Equal As Integers    ${rc}    0
     Should Contain    ${out}    pong
 
-Ask the rspamd password through Traefik
-    ${out}    ${rc} =    Execute Command    api-cli run module/${module_id}/reveal-rspamd-password
-    ...    return_rc=True
-    Should Be Equal As Integers    ${rc}    0
-    &{reveal} =    Evaluate    json.loads($out)    modules=json
-    Should Not Be Empty    ${reveal.password}
+Log in to the rspamd web interface with the NS8 administrator
     ${anonymous} =    Execute Command    curl -k -s -o /dev/null -w '\%{http_code}' --resolve ${HOST}:443:127.0.0.1 https://${HOST}/rspamd/stat
-    Should Be Equal    ${anonymous}    403
-    ${authorized} =    Execute Command    curl -k -s -o /dev/null -w '\%{http_code}' -H 'Password: ${reveal.password}' --resolve ${HOST}:443:127.0.0.1 https://${HOST}/rspamd/stat
+    Should Be Equal    ${anonymous}    401
+    ${wrong} =    Execute Command    curl -k -s -o /dev/null -w '\%{http_code}' -u '${ADMIN_USER}:wrong-password' --resolve ${HOST}:443:127.0.0.1 https://${HOST}/rspamd/stat
+    Should Be Equal    ${wrong}    401
+    ${authorized} =    Execute Command    curl -k -s -o /dev/null -w '\%{http_code}' -u '${ADMIN_USER}:${ADMIN_PASSWORD}' --resolve ${HOST}:443:127.0.0.1 https://${HOST}/rspamd/stat
     Should Be Equal    ${authorized}    200
-    ${page} =    Execute Command    curl -k -s --resolve ${HOST}:443:127.0.0.1 https://${HOST}/rspamd/
+    ${page} =    Execute Command    curl -k -s -u '${ADMIN_USER}:${ADMIN_PASSWORD}' --resolve ${HOST}:443:127.0.0.1 https://${HOST}/rspamd/
     Should Contain    ${page}    Rspamd
+    # The controller asks its password even on the loopback of the node
+    ${direct} =    Execute Command    runagent -m ${module_id} bash -c 'curl -s -o /dev/null -w "\%{http_code}" http://127.0.0.1:$(echo $TCP_PORTS | cut -d, -f2)/stat'
+    Should Be Equal    ${direct}    403
 
 Switch the worker back to the pod and rspamd off
     ${rc}    ${out} =    Run configure-module    {"host":"${HOST}","worker_host_network":false,"rspamd_container":false,"rspamd_webui":false}

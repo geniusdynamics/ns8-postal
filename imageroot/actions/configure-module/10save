@@ -32,4 +32,6 @@ agent.set_env("TRAEFIK_HTTP2HTTPS", settings["http2https"])
 agent.set_env("TRAEFIK_LETS_ENCRYPT", settings["lets_encrypt"])
 agent.set_env("POSTAL_SMTP_PORT", settings["smtp_port"])
 agent.set_env("POSTAL_SMTP_HOSTNAME", postal.smtp_hostname(settings))
+if postal.needs_extra_ports(settings):
+    postal.ensure_extra_ports()
 postal.set_unit_env(settings)

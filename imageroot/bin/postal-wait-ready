@@ -68,10 +68,11 @@ def worker():
 
 
 def rspamd():
-    # The unauthenticated /ping of the controller
-    subprocess.run(["podman", "exec", "rspamd-app", "bash", "-c",
-                    'exec 3<>/dev/tcp/127.0.0.1/11334; printf "GET /ping HTTP/1.0\\r\\n\\r\\n" >&3; grep -q pong <&3'],
-                   check=True, capture_output=True, timeout=20)
+    # The unauthenticated /ping of the controller, published by the pod
+    import postal_ns8 as postal
+    with urllib.request.urlopen(postal.rspamd_url() + "/ping", timeout=10) as resp:
+        if b"pong" not in resp.read():
+            raise RuntimeError("no pong")
 
 
 check = {"mariadb": mariadb, "web": web, "smtp": smtp, "worker": worker, "rspamd": rspamd}[component]

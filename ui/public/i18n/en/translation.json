@@ -227,19 +227,19 @@
     "worker_host_network_tradeoff_description": "With the network of the node, the worker shares the loopback interface of the node: it can reach the services that listen on 127.0.0.1 of the node, such as the other modules, and a flaw in Postal would reach them too. Postal still refuses webhooks to private and loopback addresses unless allowed_request_destinations lists them.",
     "external_services": "External services",
     "rspamd_container": "Run rspamd in the module",
-    "rspamd_container_tooltip": "An rspamd container in the pod inspects the messages for Postal. It replaces an external rspamd.",
+    "rspamd_container_tooltip": "An rspamd container, built like the one of the Mail module, runs in the Postal pod and inspects the messages for Postal. It replaces an external rspamd, and does not conflict with the rspamd of the Mail module on the same node.",
     "rspamd_webui": "rspamd web interface",
-    "rspamd_webui_tooltip": "Publish the rspamd web interface on https://<Postal host name>/rspamd through Traefik. The rspamd password is asked for every request.",
+    "rspamd_webui_tooltip": "Publish the rspamd web interface on https://<Postal host name>/rspamd through Traefik. Log in with an NS8 administrator account: Traefik then gives the rspamd password to rspamd, like ns8-mail does.",
     "open_rspamd": "Open rspamd",
-    "show_rspamd_password": "Show the rspamd password",
     "clamav_container": "Run ClamAV in the module",
     "clamav_container_tooltip": "A ClamAV container in the pod scans the messages for Postal. It replaces an external ClamAV.",
     "clamav_memory": "Memory",
     "clamav_memory_description": "ClamAV needs about 1 GB of memory, and downloads its virus signatures before it answers: the first scans are skipped until then.",
     "rspamd_container_required": "Enable rspamd in the module first",
-    "rspamd_path_in_use": "The /rspamd path of this host name is already used by another route",
     "rspamd_container_and_external": "Disable the external rspamd: the rspamd of the module replaces it",
-    "clamav_container_and_external": "Disable the external ClamAV: the ClamAV of the module replaces it"
+    "clamav_container_and_external": "Disable the external ClamAV: the ClamAV of the module replaces it",
+    "rspamd_webui_login": "Log in with your NS8 administrator user name and password.",
+    "rspamd_route_conflict": "Another route ({owner}) already serves /rspamd on this host name: the rspamd web interface is not published."
   },
   "about": {
     "title": "About"
@@ -258,8 +258,7 @@
     "list-installed-modules": "List installed modules",
     "list-node-addresses": "List node addresses",
     "list-oidc-providers": "List OIDC providers",
-    "initialize-postal": "Initialize Postal",
-    "reveal-rspamd-password": "Show the rspamd password"
+    "initialize-postal": "Initialize Postal"
   },
   "error": {
     "error": "Error",

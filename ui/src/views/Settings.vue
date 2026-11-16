@@ -790,6 +790,17 @@
                       :description="error.rspamd_webui"
                       :showCloseButton="false"
                     />
+                    <NsInlineNotification
+                      v-if="rspamdRoute.status === 'conflict'"
+                      kind="warning"
+                      :title="$t('settings.rspamd_webui')"
+                      :description="
+                        $t('settings.rspamd_route_conflict', {
+                          owner: rspamdRoute.owner,
+                        })
+                      "
+                      :showCloseButton="false"
+                    />
                     <div v-if="rspamdWebuiActive" class="mg-bottom">
                       <NsButton
                         kind="ghost"
@@ -797,31 +808,9 @@
                         @click="openRspamd"
                         >{{ $t("settings.open_rspamd") }}</NsButton
                       >
-                      <NsButton
-                        kind="ghost"
-                        :icon="Password20"
-                        :loading="loading.revealRspamdPassword"
-                        :disabled="loading.revealRspamdPassword"
-                        @click="revealRspamdPassword"
-                        >{{ $t("settings.show_rspamd_password") }}</NsButton
-                      >
-                      <NsCodeSnippet
-                        v-if="rspamdPassword"
-                        :copyTooltip="$t('settings.copy_to_clipboard')"
-                        :copyFeedback="$t('settings.copied')"
-                        :moreText="$t('settings.show_more')"
-                        :lessText="$t('settings.show_less')"
-                        light
-                        class="mg-top-sm"
-                        >{{ rspamdPassword }}</NsCodeSnippet
-                      >
-                      <NsInlineNotification
-                        v-if="error.revealRspamdPassword"
-                        kind="error"
-                        :title="$t('settings.show_rspamd_password')"
-                        :description="error.revealRspamdPassword"
-                        :showCloseButton="false"
-                      />
+                      <p class="helper">
+                        {{ $t("settings.rspamd_webui_login") }}
+                      </p>
                     </div>
                   </template>
                   <NsToggle
@@ -1090,8 +1079,8 @@ export default {
       smtpPort: "2525",
       smtpPortChoices: [],
       trackDomains: [],
-      rspamdPassword: "",
       savedRspamdWebui: false,
+      rspamdRoute: { status: "off", owner: "" },
       mxRecords: "",
       oidcPreset: "",
       oidcProviders: [],
@@ -1142,14 +1131,12 @@ export default {
         configureModule: false,
         initializePostal: false,
         listNodeAddresses: false,
-        revealRspamdPassword: false,
       },
       error: {
         getConfiguration: "",
         configureModule: "",
         initializePostal: "",
         listNodeAddresses: "",
-        revealRspamdPassword: "",
       },
     };
   },
@@ -1343,6 +1330,7 @@ export default {
             "smtp_hostname_effective",
             "track_domains",
             "smtp_port_choices",
+            "rspamd_webui_route",
           ].includes(key)
         ) {
           continue;
@@ -1357,10 +1345,11 @@ export default {
       this.smtpPort = String(config.smtp_port);
       this.smtpPortChoices = config.smtp_port_choices || [];
       this.trackDomains = config.track_domains || [];
-      this.savedRspamdWebui = !!(
-        config.rspamd_container && config.rspamd_webui
-      );
-      this.rspamdPassword = "";
+      this.rspamdRoute = config.rspamd_webui_route || {
+        status: "off",
+        owner: "",
+      };
+      this.savedRspamdWebui = this.rspamdRoute.status === "published";
       for (const field of SECRET_FIELDS) {
         this.secretsSet[field] = !!config[field + "_set"];
         this.secrets[field] = "";
@@ -1431,38 +1420,6 @@ export default {
     },
     openRspamd() {
       window.open(`https://${this.form.host}/rspamd/`, "_blank");
-    },
-    async revealRspamdPassword() {
-      this.loading.revealRspamdPassword = true;
-      this.error.revealRspamdPassword = "";
-      const err = await this.runTask(
-        "reveal-rspamd-password",
-        {},
-        {
-          title: this.$t("settings.show_rspamd_password"),
-          isNotificationHidden: true,
-        },
-        {
-          completed: (taskContext, taskResult) => {
-            this.rspamdPassword = taskResult.output.password;
-            this.loading.revealRspamdPassword = false;
-          },
-          aborted: () => {
-            this.error.revealRspamdPassword = this.$t("error.generic_error");
-            this.loading.revealRspamdPassword = false;
-          },
-          "validation-failed": () => {
-            this.error.revealRspamdPassword = this.$t(
-              "settings.rspamd_container_required"
-            );
-            this.loading.revealRspamdPassword = false;
-          },
-        }
-      );
-      if (err) {
-        this.error.revealRspamdPassword = this.getErrorMessage(err);
-        this.loading.revealRspamdPassword = false;
-      }
     },
     trackStatusKind(status) {
       return (

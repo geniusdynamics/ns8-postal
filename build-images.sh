@@ -17,6 +17,9 @@ reponame="postal"
 # Node.js 25+ no longer ships Corepack, install it from npm
 # renovate: datasource=npm packageName=corepack
 corepack_version=0.36.0
+# Base of the postal-rspamd image
+# renovate: datasource=docker packageName=docker.io/library/alpine
+alpine_version=3.24.4
 
 # Create a new empty container image
 container=$(buildah from scratch)
@@ -42,15 +45,18 @@ buildah add "${container}" ui/dist /ui
 # - traefik@node:fulladm: web route, and the certificate of the SMTP host
 #   name for STARTTLS (get-certificate, set-certificate)
 # - node:fwadm: open the SMTP port of the pod on the node firewall
-# - one TCP port: the web interface, published on 127.0.0.1 for Traefik
-# - images: Postal and MariaDB, and the optional rspamd and ClamAV, pinned
-#   versions tracked by Renovate
+# - node:portsadm: the two ports of rspamd and ClamAV for installs created
+#   with one TCP port
+# - three TCP ports, published on 127.0.0.1: the web interface (Traefik),
+#   the rspamd controller and clamd of the optional containers
+# - images: Postal and MariaDB, the optional ClamAV, pinned versions
+#   tracked by Renovate, and the postal-rspamd image built below
 buildah config --entrypoint=/ \
-	--label="org.nethserver.authorizations=traefik@node:fulladm node:fwadm" \
-	--label="org.nethserver.tcp-ports-demand=1" \
+	--label="org.nethserver.authorizations=traefik@node:fulladm node:fwadm,portsadm" \
+	--label="org.nethserver.tcp-ports-demand=3" \
 	--label="org.nethserver.rootfull=0" \
 	--label="org.nethserver.min-core=3.0.0" \
-	--label="org.nethserver.images=ghcr.io/postalserver/postal:3.3.7 docker.io/mariadb:13.0.2 docker.io/rspamd/rspamd:4.3.0 docker.io/clamav/clamav:1.5.4" \
+	--label="org.nethserver.images=ghcr.io/postalserver/postal:3.3.7 docker.io/mariadb:13.0.2 docker.io/clamav/clamav:1.5.4 ${repobase}/postal-rspamd:${IMAGETAG:-latest}" \
 	"${container}"
 # Commit the image
 buildah commit "${container}" "${repobase}/${reponame}"
@@ -59,14 +65,31 @@ buildah commit "${container}" "${repobase}/${reponame}"
 images+=("${repobase}/${reponame}")
 
 #
-# NOTICE:
+# rspamd image of the optional rspamd_container setting, built like the
+# mail-rspamd image of ns8-mail: rspamd with its Redis backends and a local
+# Unbound resolver, on Alpine (see rspamd/README.md)
 #
-# It is possible to build and publish multiple images.
-#
-# 1. create another buildah container
-# 2. add things to it and commit it
-# 3. append the image url to the images array
-#
+reponame="postal-rspamd"
+container=$(buildah from "docker.io/library/alpine:${alpine_version}")
+buildah run "${container}" /bin/sh <<'EOF'
+set -e
+# Software installation order is important to preserve uid and gid allocation:
+apk add --no-cache redis
+apk add --no-cache rspamd rspamd-controller rspamd-proxy rspamd-fuzzy rspamd-client
+apk add --no-cache unbound
+# for envsubst
+apk add --no-cache gettext
+EOF
+buildah add "${container}" rspamd/ /
+buildah config \
+	--volume=/var/lib/redis \
+	--volume=/var/lib/rspamd \
+	--volume=/etc/rspamd/override.d \
+	--entrypoint='["/entrypoint.sh"]' \
+	--cmd='' \
+	"${container}"
+buildah commit "${container}" "${repobase}/${reponame}"
+images+=("${repobase}/${reponame}")
 
 #
 # Setup CI when pushing to Github.

@@ -153,9 +153,9 @@ the TLS certificate paths and `migration_waiter`.
   delivers the messages, runs outside the pod with `--network=host`, still
   rootless, and can bind every address of the node. It reaches MariaDB
   through its unix socket (the `mysqld-run` volume), so no database port is
-  opened; the optional rspamd and ClamAV are published for it on
-  `127.0.0.2` and `127.0.0.3` with the module TCP port, its health server
-  answers on `127.0.0.4`. **Tradeoff**: the worker then shares the loopback
+  opened; the optional rspamd controller and ClamAV are published for it on
+  127.0.0.1 with the second and third TCP ports of the module (the
+  controller asks its password), its health server answers on `127.0.0.4`. **Tradeoff**: the worker then shares the loopback
   interface of the node and can reach the services listening on its
   127.0.0.1 (other modules); Postal still refuses webhooks to private and
   loopback addresses unless `allowed_request_destinations` lists them. The
@@ -189,18 +189,29 @@ the TLS certificate paths and `migration_waiter`.
   `postal-track-routes.timer` adds and removes them every 5 minutes, and
   configure-module at once. A name already routed by another module is
   skipped. The Settings page lists each name with its certificate status.
-- **Spam and virus checks**: `rspamd_container` runs rspamd in the pod
-  (off by default) and points Postal to it; `rspamd_webui` publishes its
-  web interface on `https://<host>/rspamd` (Traefik route
-  `<module>-rspamd`). The controller password is generated in
-  `state/rspamd.env` (0600, backed up); the Settings page shows it through
-  the `reveal-rspamd-password` action, which the reader role cannot run.
-  The controller trusts no address (`secure_ip`): Traefik connects from the
-  loopback, so the password is asked for every request. `clamav_container`
-  runs ClamAV in the pod (off by default); it needs about 1 GB of memory
-  and downloads its signatures before it answers. Both images are pulled
-  with the module even when they stay off. Without them, point Postal to
-  existing rspamd, SpamAssassin or ClamAV services.
+- **Spam and virus checks**: `rspamd_container` (off by default) runs the
+  `postal-rspamd` image, built like the `mail-rspamd` image of ns8-mail
+  (Alpine, rspamd, two Redis backends, a local Unbound resolver), and
+  points Postal to it. Unlike ns8-mail it runs in the postal pod, not with
+  the network of the node: its ports 11332-11336 belong to the pod, so it
+  never conflicts with the rspamd of ns8-mail on the same node. Postal
+  scans on the normal worker (pod port 11333); the pod publishes the
+  controller on 127.0.0.1 only, on the second TCP port of the module
+  (installs older than this release get it from the node agent the first
+  time rspamd or ClamAV is enabled). `rspamd_webui` publishes its
+  web interface on `https://<host>/rspamd` like ns8-mail: Traefik
+  (`forward_auth`) asks the NS8 api-server to check the login of an NS8
+  administrator, then injects the controller password (`RSPAMD_adminpw`,
+  generated in `state/rspamd.env`, 0600, backed up). The login is the NS8
+  administrator one: nobody needs the rspamd password, and the controller
+  trusts no address. ns8-mail routes `/rspamd` on every host name; the
+  Postal route is scoped to the Postal host name, so both coexist. If
+  another route already serves `/rspamd` on the Postal host name, the route
+  is skipped and the Settings page reports it. `clamav_container` runs
+  ClamAV in the pod (off by default); it needs about 1 GB of memory and
+  downloads its signatures before it answers. The images are pulled with
+  the module even while the settings stay off. Without them, point Postal
+  to existing rspamd, SpamAssassin or ClamAV services.
 - Retention, message size per server, click and open tracking are settings
   of each Postal mail server, in the Postal web interface. Truemail is not
   part of Postal.

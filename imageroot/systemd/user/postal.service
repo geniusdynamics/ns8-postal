@@ -8,8 +8,9 @@
 # Traefik reaches the web server on 127.0.0.1:${TCP_PORT}; the SMTP server
 # (pod port 25) is published on ${POSTAL_SMTP_PORT} of every address of
 # the node, opened in the firewall by configure-module. POSTAL_POD_PUBLISH
-# adds, on 127.0.0.2 and 127.0.0.3, the rspamd controller and clamd of the
-# optional containers (web UI, host-network worker).
+# adds, on 127.0.0.1 and the second and third TCP ports of the module, the
+# rspamd controller and clamd of the optional containers (web UI,
+# host-network worker).
 #
 
 # The pod Wants its containers, they are BindsTo it: starting or stopping
