@@ -276,7 +276,8 @@ Log in to the rspamd web interface with the NS8 administrator
     Should Contain    ${page}    Rspamd
     # The controller asks its password even on the loopback of the node
     ${direct} =    Execute Command    runagent -m ${module_id} bash -c 'curl -s -o /dev/null -w "\%{http_code}" http://127.0.0.1:$(echo $TCP_PORTS | cut -d, -f2)/stat'
-    Should Be Equal    ${direct}    403
+    # rspamd answers 401 (403 in older releases) without the password
+    Should Match Regexp    ${direct}    ^40[13]$
 
 Switch the worker back to the pod and rspamd off
     ${rc}    ${out} =    Run configure-module    {"host":"${HOST}","worker_host_network":false,"rspamd_container":false,"rspamd_webui":false}
