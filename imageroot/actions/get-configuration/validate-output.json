@@ -389,6 +389,40 @@
             "items": {
                 "type": "string"
             }
+        },
+        "track_domains": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "no_lets_encrypt",
+                            "pending",
+                            "obtained",
+                            "used_by_another_route"
+                        ]
+                    }
+                }
+            }
+        },
+        "smtp_port_choices": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "port": {
+                        "type": "integer"
+                    },
+                    "used_by": {
+                        "type": "string"
+                    }
+                }
+            }
         }
     }
 }

@@ -11,7 +11,8 @@
 import json
 import postal_ns8 as postal
 
-changed, warnings = postal.render(postal.load_settings())
+affected, warnings = postal.render(postal.load_settings())
+postal.log(f"configure-module: containers to restart: {sorted(affected) or 'none'}")
 for warning in warnings:
     postal.log(f"configure-module warning: {warning}")
 postal.write_file(".configure-warnings.json", json.dumps(warnings) + "\n", 0o644)

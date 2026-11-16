@@ -1,0 +1,18 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Routes and certificates of the Postal track domains, see
+# bin/postal-track-routes. A failure is logged and retried by the timer: it
+# must not fail the configuration.
+
+exec 1>&2
+
+systemctl --user enable --now postal-track-routes.timer
+if ! postal-track-routes --full; then
+    echo "<4>postal-track-routes failed, postal-track-routes.timer retries in 5 minutes"
+fi
+exit 0

@@ -45,5 +45,6 @@ if previous != name:
             os.unlink(path)
         except FileNotFoundError:
             pass
-postal.fetch_certificate(name)
+if postal.fetch_certificate(name):
+    postal.mark_restart(["smtp"])  # the SMTP server reads the certificate at startup
 postal.write_file(".tls-hostname", name + "\n")

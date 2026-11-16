@@ -1,0 +1,17 @@
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Traefik routes and certificates of the Postal track domains, see
+# bin/postal-track-routes
+
+[Unit]
+Description=Postal track domain routes and certificates
+After=mariadb-app.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%S/state
+ExecStart=/usr/local/bin/runagent postal-track-routes
+SyslogIdentifier=postal-track-routes
