@@ -39,7 +39,8 @@ Update scenario
     ${out}    ${rc} =    Execute Command    add-module ghcr.io/geniusdynamics/postal:${release} 1
     ...    return_rc=True
     Should Be Equal As Integers    ${rc}    0    add-module ${release} failed: ${out}
-    &{output} =    Evaluate    json.loads($out)    modules=json
+    # add-module prints a Python dict
+    &{output} =    Evaluate    ast.literal_eval($out)    modules=ast
     Set Test Variable    ${module_id}    ${output.module_id}
     IF    '${release}' == '1.1.0'
         ${payload} =    Set Variable    {"host":"${HOST}","http2https":true,"lets_encrypt":false,"from_name":"Upgrade Sender","from_address":"sender@example.org"}
