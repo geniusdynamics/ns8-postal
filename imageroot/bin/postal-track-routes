@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+"""Give the track domains of Postal a Traefik route and a certificate.
+
+Postal serves the open and click tracking of a mail server on its track
+domains (table track_domains: <name>.<domain>, CNAME to dns.track_domain):
+the requests reach the web server with the X-Postal-Track-Host: 1 header.
+Like ns8-mailcow does for its mail domains, each name gets its own route,
+<MODULE_ID>-track-<name>, to the Postal web server, with Let's Encrypt
+when the lets_encrypt setting is on. Routes of names that are gone are
+deleted; a name another module (or a manual route) already serves is
+skipped.
+
+Run by postal-track-routes.timer (every 5 minutes) and configure-module
+(--full: compare with the Traefik route list too). Quiet when nothing
+changed. get-configuration reports each name with its certificate status.
+"""
+
+import fcntl
+import json
+import os
+import subprocess
+import sys
+
+import agent
+import agent.tasks
+import postal_ns8 as postal
+
+STATE_FILE = postal.TRACK_ROUTES_STATE
+
+
+def track_domains():
+    """{name: ssl_enabled} of the track domains, None if MariaDB does not answer"""
+    db = postal.read_env(postal.DATABASE_ENV)
+    query = ("SELECT CONCAT(t.name, '.', d.name), IFNULL(t.ssl_enabled, 1) FROM track_domains t "
+             "JOIN domains d ON d.id = t.domain_id")
+    proc = subprocess.run(
+        ["podman", "exec", "-e", "MYSQL_PWD=" + db.get("MARIADB_ROOT_PASSWORD", ""), "mariadb-app",
+         "mariadb", "-h", "127.0.0.1", "-u", "root", "-N", "-B", db.get("MARIADB_DATABASE", "postal"), "-e", query],
+        capture_output=True, text=True)
+    if proc.returncode != 0:
+        return None
+    found = {}
+    for line in proc.stdout.splitlines():
+        parts = line.strip().split("\t")
+        if len(parts) == 2 and postal.HOSTNAME_RE.match(parts[0].lower()):
+            found[parts[0].lower()] = parts[1] == "1"
+    return found
+
+
+def route_id(name):
+    return f"{os.environ['MODULE_ID']}-track-{name}"
+
+
+def traefik(action, data):
+    return agent.tasks.run(
+        agent_id=agent.resolve_agent_id("traefik@node"),
+        action=action,
+        data=data,
+        extra={"isNotificationHidden": True},
+    )
+
+
+def read_state():
+    try:
+        with open(STATE_FILE) as fstate:
+            return json.load(fstate)
+    except (FileNotFoundError, ValueError):
+        return {"routes": {}}
+
+
+def main():
+    os.chdir(os.environ["AGENT_STATE_DIR"])
+    # The timer and configure-module may run at the same time
+    lock = open(".track-routes.lock", "w")
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    full = "--full" in sys.argv
+    if not os.path.exists(postal.SETTINGS_FILE) or not os.getenv("TCP_PORT"):
+        return 0  # not configured yet
+    settings = postal.load_settings()
+    domains = track_domains()
+    if domains is None:
+        postal.log("postal-track-routes: the Postal database does not answer, routes are left as they are")
+        return 0
+    domains.pop(settings["host"], None)
+
+    state = read_state()
+    current = state.get("routes", {})
+
+    def route_conf(ssl_enabled):
+        return {
+            "url": "http://127.0.0.1:" + os.environ["TCP_PORT"],
+            # A track domain without SSL in Postal gets http:// links
+            "http2https": bool(ssl_enabled),
+            "lets_encrypt": bool(settings["lets_encrypt"]),
+        }
+
+    if full:
+        # Trust the Traefik route list over the state file
+        response = traefik("list-routes", {"expand_list": True})
+        agent.assert_exp(response["exit_code"] == 0, "list-routes failed")
+        prefix = route_id("")
+        current = {}
+        for route in response["output"] or []:
+            if isinstance(route, dict) and route.get("instance", "").startswith(prefix):
+                current[route["instance"].removeprefix(prefix)] = {
+                    "url": route.get("url"),
+                    "http2https": route.get("http2https"),
+                    "lets_encrypt": route.get("lets_encrypt"),
+                }
+
+    changed = False
+    errors = 0
+    for name in sorted(set(current) - set(domains)):
+        response = traefik("delete-route", {"instance": route_id(name)})
+        if response["exit_code"] == 0:
+            postal.log(f"postal-track-routes: removed the route of {name}")
+            current.pop(name)
+            changed = True
+        else:
+            postal.log(agent.SD_WARNING + f"postal-track-routes: cannot remove the route of {name}")
+            errors += 1
+
+    skipped = []
+    for name, ssl_enabled in sorted(domains.items()):
+        conf = route_conf(ssl_enabled)
+        if current.get(name) == conf:
+            continue
+        if name not in current and agent.http_route_in_use(domain=name):
+            skipped.append(name)
+            continue
+        response = traefik("set-route", dict(conf, instance=route_id(name), host=name,
+                                             headers={"request": {"X-Postal-Track-Host": "1",
+                                                                  "X-Forwarded-Proto": "https" if ssl_enabled else "http"}}))
+        if response["exit_code"] == 0:
+            postal.log(f"postal-track-routes: route of {name} (Let's Encrypt: {conf['lets_encrypt']})")
+            current[name] = conf
+            changed = True
+        else:
+            postal.log(agent.SD_WARNING + f"postal-track-routes: cannot set the route of {name}: {response.get('error', '')}")
+            errors += 1
+
+    if skipped != state.get("skipped", []):
+        for name in skipped:
+            postal.log(agent.SD_WARNING + f"postal-track-routes: {name} has a route of another instance, skipped")
+        changed = True
+    if changed or full or not os.path.exists(STATE_FILE):
+        postal.write_file(STATE_FILE, json.dumps({"routes": current, "skipped": skipped}, indent=1, sort_keys=True) + "\n")
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

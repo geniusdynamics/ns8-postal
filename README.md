@@ -82,7 +82,7 @@ the fields of `configure-module` and of `get-configuration`.
 | Section | Fields | Postal option |
 |---|---|---|
 | Web interface | `host`, `lets_encrypt`, `http2https` | `postal.web_hostname` |
-| SMTP server | `smtp_hostname` (empty: `host`), `smtp_port`, `smtp_tls`, `max_message_size` (MB), `smtp_log_connections` | `postal.smtp_hostname`, `smtp_server.*` |
+| SMTP server | `smtp_hostname` (empty: `host`), `smtp_port` (2525, 25, 587 or another), `smtp_tls`, `max_message_size` (MB), `smtp_log_connections` | `postal.smtp_hostname`, `smtp_server.*` |
 | Delivery | `default_maximum_delivery_attempts`, `default_maximum_hold_expiry_days`, `default_suppression_list_automatic_removal_days`, `default_spam_threshold`, `default_spam_failure_threshold`, `helo_hostname`, `use_resent_sender_header` | `postal.*`, `dns.helo_hostname` |
 | IP pools | `use_ip_pools` | `POSTAL_USE_IP_POOLS` |
 | Relays | `smtp_relays` (`[{"host", "port", "ssl_mode": "Auto/STARTTLS/TLS/None"}]`), `relay_via_cluster_smarthost`, `cluster_relay_provider` | `POSTAL_SMTP_RELAYS` |
@@ -173,13 +173,25 @@ the TLS certificate paths and `migration_waiter`.
 - **SMTP port**: port 25 and the other mail ports cannot be shared with the
   Mail, mailcow or KumoMTA modules of the same node; configure-module
   refuses a port they use.
-- **Track domain**: click and open tracking need the track domain routed to
-  the Postal web server; the module routes only `host` in Traefik.
+- **Track domains**: every track domain of the Postal mail servers
+  (`<name>.<domain>`, a CNAME to the `dns_track_domain`) gets its own
+  Traefik route, `<module>-track-<name>`, with the `X-Postal-Track-Host`
+  header Postal expects and Let's Encrypt when `lets_encrypt` is on.
+  `postal-track-routes.timer` adds and removes them every 5 minutes, and
+  configure-module at once. A name already routed by another module is
+  skipped. The Settings page lists each name with its certificate status.
 - **Spam and virus checks**: rspamd, SpamAssassin and ClamAV are not run by
   the module: point Postal to existing services.
 - Retention, message size per server, click and open tracking are settings
   of each Postal mail server, in the Postal web interface. Truemail is not
   part of Postal.
+
+### What a change restarts
+
+configure-module restarts only the containers that read a changed part of
+the configuration: an OIDC change restarts the web server, a spam check
+change the worker, a certificate the SMTP server. A new SMTP port creates
+the pod again (every container, MariaDB included), as do updates.
 
 ### Upgrading from an older release
 

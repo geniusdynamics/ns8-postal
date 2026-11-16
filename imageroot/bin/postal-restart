@@ -21,6 +21,8 @@ if [[ "$1" == "--if-active" ]] && ! systemctl --user -q is-active postal.service
     exit 0
 fi
 
+# A full restart applies every pending change
+rm -f .restart-set.json
 systemctl --user restart postal.service mariadb-app.service
 postal-db-init
 systemctl --user start postal-app.service postal-smtp-app.service postal-worker-app.service

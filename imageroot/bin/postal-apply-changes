@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+#
+# 80start_services of configure-module: restart only the containers the
+# configuration change affects (the restart set written by the previous
+# steps, see postal_ns8.RESTART_MAP). A pod that is not running, or a
+# change of the pod itself (the SMTP port it publishes), restarts
+# everything with postal-restart. MariaDB restarts only then.
+#
+
+import subprocess
+import sys
+import postal_ns8 as postal
+
+names = postal.take_restart_set()
+active = subprocess.run(["systemctl", "--user", "-q", "is-active", "postal.service"]).returncode == 0
+
+if not active or postal.POD in names:
+    postal.log(f"Restarting the whole pod ({'not running' if not active else 'pod settings changed'})")
+    sys.exit(subprocess.run(["postal-restart"]).returncode)
+
+units = [postal.UNITS[name] for name in sorted(names) if name in postal.UNITS]
+if units:
+    postal.log("Restarting " + " ".join(units))
+    if subprocess.run(["systemctl", "--user", "restart", *units]).returncode != 0:
+        sys.exit(1)
+else:
+    postal.log("No container is affected by the change: nothing restarted")
+# Containers stopped for another reason start again
+sys.exit(subprocess.run(["systemctl", "--user", "start", *postal.UNITS.values()]).returncode)

@@ -1,11 +1,14 @@
 *** Settings ***
 Library    SSHLibrary
 Library    String
+Library    Collections
 
 *** Variables ***
 ${HOST}           postal.example.org
 ${OIDC_SECRET}    T3st-OIDC-Secr3t-Value
 ${SMTP_PORT}      2525
+${TRACK_PARENT}   example.net
+${TRACK_HOST}     click.example.net
 
 *** Keywords ***
 Run configure-module
@@ -16,6 +19,30 @@ Run configure-module
 
 Get configuration
     ${out}    ${rc} =    Execute Command    api-cli run module/${module_id}/get-configuration
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0
+    RETURN    ${out}
+
+Started at of containers
+    ${out}    ${rc} =    Execute Command    runagent -m ${module_id} podman inspect -f '{{.Name}}={{.State.StartedAt}}' mariadb-app postal-app postal-smtp-app postal-worker-app
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0
+    &{started} =    Create Dictionary
+    FOR    ${line}    IN    @{out.splitlines()}
+        ${name}    ${at} =    Evaluate    $line.split("=", 1)
+        Set To Dictionary    ${started}    ${name}=${at}
+    END
+    RETURN    ${started}
+
+Run Postal SQL
+    [Arguments]    ${sql}
+    ${b64} =    Evaluate    base64.b64encode($sql.encode()).decode()    modules=base64
+    ${out}    ${err}    ${rc} =    Execute Command    echo ${b64} | base64 -d | runagent -m ${module_id} bash -c 'source database.env; podman exec -i -e MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb-app mariadb -h 127.0.0.1 -u root postal'
+    ...    return_rc=True    return_stderr=True
+    Should Be Equal As Integers    ${rc}    0    ${err}
+
+Traefik routes
+    ${out}    ${rc} =    Execute Command    api-cli run module/traefik1/list-routes
     ...    return_rc=True
     Should Be Equal As Integers    ${rc}    0
     RETURN    ${out}
@@ -151,6 +178,46 @@ Check the web UI and the SMTP server after the changes
     ...    return_rc=True
     Should Be Equal As Integers    ${rc}    0
     Should Start With    ${out}    250
+
+Restart only the containers affected by a change
+    ${before} =    Started at of containers
+    ${rc}    ${out} =    Run configure-module    {"host":"${HOST}","oidc_name":"Other SSO"}
+    Should Be Equal As Integers    ${rc}    0
+    ${after} =    Started at of containers
+    Should Be Equal    ${before}[mariadb-app]    ${after}[mariadb-app]
+    Should Be Equal    ${before}[postal-smtp-app]    ${after}[postal-smtp-app]
+    Should Be Equal    ${before}[postal-worker-app]    ${after}[postal-worker-app]
+    Should Not Be Equal    ${before}[postal-app]    ${after}[postal-app]
+    ${rc} =    Execute Command    bash -c 'for i in $(seq 1 60); do curl -k -s --resolve ${HOST}:443:127.0.0.1 https://${HOST}/login | grep -q "Login with Other SSO" && exit 0; sleep 5; done; exit 1'
+    ...    return_rc=True  return_stdout=False
+    Should Be Equal As Integers    ${rc}    0
+
+Refuse a privileged SMTP port
+    ${rc}    ${out} =    Run configure-module    {"host":"${HOST}","smtp_port":22}
+    Should Not Be Equal As Integers    ${rc}    0
+
+Route a track domain through Traefik
+    Run Postal SQL    INSERT INTO domains (uuid, server_id, name, owner_type, owner_id, verified_at, created_at, updated_at) VALUES (UUID(), 1, '${TRACK_PARENT}', 'Server', 1, NOW(), NOW(), NOW()); INSERT INTO track_domains (uuid, server_id, domain_id, name, ssl_enabled, created_at, updated_at) VALUES (UUID(), 1, LAST_INSERT_ID(), 'click', 1, NOW(), NOW())
+    ${out}    ${rc} =    Execute Command    runagent -m ${module_id} postal-track-routes
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0
+    ${routes} =    Traefik routes
+    Should Contain    ${routes}    ${module_id}-track-${TRACK_HOST}
+    ${rc} =    Execute Command    bash -c 'for i in $(seq 1 30); do curl -k -s --resolve ${TRACK_HOST}:443:127.0.0.1 https://${TRACK_HOST}/ | grep -q "Hello." && exit 0; sleep 3; done; exit 1'
+    ...    return_rc=True  return_stdout=False
+    Should Be Equal As Integers    ${rc}    0
+    ${out} =    Get configuration
+    &{conf} =    Evaluate    json.loads($out)    modules=json
+    Should Be Equal    ${conf.track_domains[0]['name']}    ${TRACK_HOST}
+    Should Be Equal    ${conf.track_domains[0]['status']}    no_lets_encrypt
+
+Remove the route of a deleted track domain
+    Run Postal SQL    DELETE FROM track_domains WHERE name = 'click'; DELETE FROM domains WHERE name = '${TRACK_PARENT}'
+    ${out}    ${rc} =    Execute Command    runagent -m ${module_id} postal-track-routes
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0
+    ${routes} =    Traefik routes
+    Should Not Contain    ${routes}    ${module_id}-track-${TRACK_HOST}
 
 Check the database dump of the backup
     ${out}    ${rc} =    Execute Command    runagent -m ${module_id} bash -c 'module-dump-state && grep -c "CREATE DATABASE" postal.sql && module-cleanup-state'

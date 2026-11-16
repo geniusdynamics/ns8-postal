@@ -45,6 +45,7 @@ POSTAL_ENV = "postal.env"
 TLS_DIR = "tls"
 TLS_CERT = "tls/cert.pem"
 TLS_KEY = "tls/key.pem"
+TRACK_ROUTES_STATE = "track-routes.json"
 
 # Paths inside the containers
 C_SECRETS = "/run/secrets"
@@ -593,8 +594,11 @@ def app_smtp(settings, sec, warnings):
     return section, sec.get("SMTP_PASSWORD", "") if settings["app_smtp_username"] else ""
 
 
-def render(settings):
-    """Write postal.yml and postal.env; returns (changed, warnings)"""
+def render(settings, mark=True):
+    """Write postal.yml and postal.env; returns (affected containers,
+    warnings). The affected containers are the Postal processes that read
+    a changed section or variable (RESTART_MAP); they are also added to the
+    restart set of configure-module."""
     warnings = []
     sec = read_secrets()
     db = read_env(DATABASE_ENV)
@@ -745,7 +749,7 @@ def render(settings):
         lines.append(f"{section}:")
         for key, value in values.items():
             lines.append(f"  {key}: {yaml_value(value)}")
-    changed = write_file(POSTAL_YML, "\n".join(lines) + "\n", 0o644)
+    write_file(POSTAL_YML, "\n".join(lines) + "\n", 0o644)
 
     env = {
         "MAIN_DB_PASSWORD": db.get("MARIADB_ROOT_PASSWORD", ""),
@@ -760,8 +764,109 @@ def render(settings):
         env["RSPAMD_PASSWORD"] = sec["RSPAMD_PASSWORD"]
     if sec.get("LOGGING_SENTRY_DSN"):
         env["LOGGING_SENTRY_DSN"] = sec["LOGGING_SENTRY_DSN"]
-    changed = write_env(POSTAL_ENV, env) or changed
-    return changed, sorted(set(warnings))
+    write_env(POSTAL_ENV, env)
+    affected = changed_containers(conf, env)
+    if mark:
+        mark_restart(affected)
+    return affected, sorted(set(warnings))
+
+
+# --------------------------------------------------------------------------
+# Restart only what a change affects
+# --------------------------------------------------------------------------
+
+RENDERED_STATE = ".rendered.json"
+RESTART_SET = ".restart-set.json"
+POD = "pod"                      # the pod and every container
+UNITS = {
+    "web": "postal-app.service",
+    "smtp": "postal-smtp-app.service",
+    "worker": "postal-worker-app.service",
+}
+
+# postal.yml section -> Postal processes reading it
+RESTART_MAP = {
+    "postal": ["web", "smtp", "worker"],
+    "web_server": ["web"],
+    "worker": ["worker"],
+    "main_db": ["web", "smtp", "worker"],
+    "message_db": ["web", "smtp", "worker"],
+    "logging": ["web", "smtp", "worker"],
+    "gelf": ["web", "smtp", "worker"],
+    "smtp_server": ["smtp"],
+    "dns": ["web", "smtp", "worker"],
+    "smtp": ["web", "worker"],          # e-mails of Postal itself
+    "rails": ["web", "smtp", "worker"],
+    "rspamd": ["worker"],               # the worker inspects the messages
+    "spamd": ["worker"],
+    "clamav": ["worker"],
+    "smtp_client": ["worker"],
+    "migration_waiter": ["web", "smtp", "worker"],
+    "oidc": ["web"],
+}
+# postal.env variable -> Postal processes reading it
+ENV_RESTART_MAP = {
+    "OIDC_SECRET": ["web"],
+    "SMTP_PASSWORD": ["web", "worker"],
+    "RSPAMD_PASSWORD": ["worker"],
+}
+
+
+def _digest(value):
+    import hashlib
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
+def changed_containers(conf, env):
+    """Containers reading a section of conf or a variable of env that
+    differs from the previous rendering"""
+    try:
+        with open(RENDERED_STATE) as fp:
+            previous = json.load(fp)
+    except (FileNotFoundError, ValueError):
+        previous = None
+    current = {
+        "conf": {section: _digest(values) for section, values in conf.items()},
+        "env": {key: _digest(value) for key, value in env.items()},
+    }
+    write_file(RENDERED_STATE, json.dumps(current, indent=1, sort_keys=True) + "\n", 0o600)
+    if previous is None:
+        return {"web", "smtp", "worker"}
+    affected = set()
+    for section in set(current["conf"]) | set(previous.get("conf", {})):
+        if current["conf"].get(section) != previous.get("conf", {}).get(section):
+            affected.update(RESTART_MAP.get(section, ["web", "smtp", "worker"]))
+    for key in set(current["env"]) | set(previous.get("env", {})):
+        if current["env"].get(key) != previous.get("env", {}).get(key):
+            affected.update(ENV_RESTART_MAP.get(key, ["web", "smtp", "worker"]))
+    return affected
+
+
+def mark_restart(names):
+    """Add names (keys of UNITS, or POD) to the restart set that
+    configure-module applies in 80start_services"""
+    names = set(names)
+    if not names:
+        return
+    try:
+        with open(RESTART_SET) as fp:
+            names.update(json.load(fp))
+    except (FileNotFoundError, ValueError):
+        pass
+    write_file(RESTART_SET, json.dumps(sorted(names)) + "\n", 0o644)
+
+
+def take_restart_set():
+    try:
+        with open(RESTART_SET) as fp:
+            names = set(json.load(fp))
+    except (FileNotFoundError, ValueError):
+        names = set()
+    try:
+        os.unlink(RESTART_SET)
+    except FileNotFoundError:
+        pass
+    return names
 
 
 def port_in_use(port):
@@ -1028,3 +1133,53 @@ def fetch_certificate(name):
     os.chmod(TLS_KEY, 0o600)
     os.chmod(TLS_CERT, 0o644)
     return True
+
+
+# --------------------------------------------------------------------------
+# Track domains
+# --------------------------------------------------------------------------
+
+def track_domain_status(settings):
+    """[{name, status}] of the track domain routes (bin/postal-track-routes),
+    with the state of their Let's Encrypt certificate as Traefik reports it"""
+    import agent.tasks
+    try:
+        with open(TRACK_ROUTES_STATE) as fp:
+            state = json.load(fp)
+    except (FileNotFoundError, ValueError):
+        state = {}
+    pending = set()
+    prefix = os.environ.get("MODULE_ID", "") + "-track-"
+    if state.get("routes") and settings["lets_encrypt"]:
+        try:
+            response = agent.tasks.run(agent_id=agent.resolve_agent_id("traefik@node"), action="list-routes",
+                                       data={"expand_list": True}, extra={"isNotificationHidden": True})
+            for route in response.get("output") or []:
+                if isinstance(route, dict) and route.get("instance", "").startswith(prefix) \
+                        and route.get("lets_encrypt_status") == "pending":
+                    pending.add(route["instance"].removeprefix(prefix))
+        except Exception as ex:
+            log(agent.SD_WARNING + f"list-routes failed: {ex}")
+    names = []
+    for name, conf in sorted(state.get("routes", {}).items()):
+        if not conf.get("lets_encrypt"):
+            status = "no_lets_encrypt"
+        elif name in pending:
+            status = "pending"  # no certificate yet: check the DNS record of the name
+        else:
+            status = "obtained"
+        names.append({"name": name, "status": status})
+    for name in state.get("skipped", []):
+        names.append({"name": name, "status": "used_by_another_route"})
+    return names
+
+
+def smtp_port_choices():
+    """[{port, used_by}] of the usual SMTP ports: used_by is the mail
+    module of the node holding it, or empty"""
+    try:
+        taken = ports_taken_on_node()
+    except Exception as ex:
+        log(agent.SD_WARNING + f"Cannot list the mail modules of the node: {ex}")
+        taken = {}
+    return [{"port": port, "used_by": taken.get(port, "")} for port in (2525, 25, 587)]

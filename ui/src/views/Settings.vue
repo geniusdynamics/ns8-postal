@@ -95,15 +95,39 @@
                     ref="smtp_hostname"
                     class="mg-bottom maxwidth"
                   />
-                  <NsTextInput
-                    type="number"
-                    :label="$t('settings.smtp_port')"
+                  <NsComboBox
+                    :title="$t('settings.smtp_port')"
+                    :label="$t('settings.smtp_port_placeholder')"
                     :helper-text="$t('settings.smtp_port_helper')"
-                    v-model.number="form.smtp_port"
+                    v-model="smtpPort"
+                    :options="smtpPortOptions"
+                    :auto-filter="false"
+                    :auto-highlight="true"
+                    :accept-user-input="true"
+                    :user-input-label="$t('settings.other_port')"
                     :invalid-message="error.smtp_port"
                     :disabled="busy"
                     ref="smtp_port"
                     class="mg-bottom maxwidth"
+                  />
+                  <NsInlineNotification
+                    v-if="smtpPortUsedBy"
+                    kind="warning"
+                    :title="$t('settings.smtp_port_conflict_title')"
+                    :description="
+                      $t('settings.smtp_port_conflict', {
+                        port: form.smtp_port,
+                        module: smtpPortUsedBy,
+                      })
+                    "
+                    :showCloseButton="false"
+                  />
+                  <NsInlineNotification
+                    v-else-if="Number(form.smtp_port) === 25"
+                    kind="info"
+                    :title="$t('settings.smtp_port_25_title')"
+                    :description="$t('settings.smtp_port_25')"
+                    :showCloseButton="false"
                   />
                   <NsToggle
                     value="smtpTls"
@@ -146,6 +170,37 @@
                     class="mg-bottom-sm"
                     >{{ record }}</NsCodeSnippet
                   >
+                </template>
+              </cv-accordion-item>
+
+              <!-- track domains -->
+              <cv-accordion-item>
+                <template slot="title">{{
+                  $t("settings.track_domains")
+                }}</template>
+                <template slot="content">
+                  <p class="mg-bottom">
+                    {{
+                      $t("settings.track_domains_description", {
+                        track: dns.track_domain || "",
+                      })
+                    }}
+                  </p>
+                  <p v-if="!trackDomains.length" class="mg-bottom helper">
+                    {{ $t("settings.no_track_domains") }}
+                  </p>
+                  <div
+                    v-for="td in trackDomains"
+                    :key="td.name"
+                    class="track-domain mg-bottom-sm"
+                  >
+                    <span class="track-name">{{ td.name }}</span>
+                    <NsTag
+                      :kind="trackStatusKind(td.status)"
+                      :label="$t('settings.track_status_' + td.status)"
+                      size="sm"
+                    />
+                  </div>
                 </template>
               </cv-accordion-item>
 
@@ -898,6 +953,9 @@ export default {
         rspamd_password: false,
       },
       oidcScopes: "openid, email",
+      smtpPort: "2525",
+      smtpPortChoices: [],
+      trackDomains: [],
       mxRecords: "",
       oidcPreset: "",
       oidcProviders: [],
@@ -961,6 +1019,27 @@ export default {
     ...mapState(["instanceName", "core", "appName"]),
     busy() {
       return this.loading.getConfiguration || this.loading.configureModule;
+    },
+    smtpPortOptions() {
+      const choices = this.smtpPortChoices.length
+        ? this.smtpPortChoices
+        : [{ port: 2525 }, { port: 25 }, { port: 587 }];
+      return choices.map((c) => ({
+        name: String(c.port),
+        value: String(c.port),
+        label: c.used_by
+          ? this.$t("settings.smtp_port_option_used", {
+              port: c.port,
+              module: c.used_by,
+            })
+          : this.$t("settings.smtp_port_option_" + c.port),
+      }));
+    },
+    smtpPortUsedBy() {
+      const choice = this.smtpPortChoices.find(
+        (c) => c.port === Number(this.form.smtp_port)
+      );
+      return choice ? choice.used_by : "";
     },
     sslModeOptions() {
       return ["Auto", "STARTTLS", "TLS", "None"].map((v) => ({
@@ -1027,6 +1106,12 @@ export default {
         `${this.dns.track_domain} IN CNAME ${host}`
       );
       return records;
+    },
+  },
+  watch: {
+    smtpPort(value) {
+      const port = parseInt(value, 10);
+      this.$set(this.form, "smtp_port", isNaN(port) ? value : port);
     },
   },
   created() {
@@ -1098,6 +1183,8 @@ export default {
             "warnings",
             "configured",
             "smtp_hostname_effective",
+            "track_domains",
+            "smtp_port_choices",
           ].includes(key)
         ) {
           continue;
@@ -1109,6 +1196,9 @@ export default {
         key: this.relayKey++,
       }));
       this.form = form;
+      this.smtpPort = String(config.smtp_port);
+      this.smtpPortChoices = config.smtp_port_choices || [];
+      this.trackDomains = config.track_domains || [];
       for (const field of SECRET_FIELDS) {
         this.secretsSet[field] = !!config[field + "_set"];
         this.secrets[field] = "";
@@ -1176,6 +1266,16 @@ export default {
         this.form.oidc_identifier = "postal";
       }
       this.focusElement("oidc_issuer");
+    },
+    trackStatusKind(status) {
+      return (
+        {
+          obtained: "green",
+          pending: "high-contrast",
+          no_lets_encrypt: "gray",
+          used_by_another_route: "red",
+        }[status] || "gray"
+      );
     },
     addRelay() {
       this.form.smtp_relays.push({
@@ -1332,6 +1432,16 @@ export default {
 
 .helper {
   color: $text-02;
+}
+
+.track-domain {
+  display: flex;
+  align-items: center;
+  gap: $spacing-03;
+}
+
+.track-name {
+  font-family: monospace;
 }
 
 .validation-error {
