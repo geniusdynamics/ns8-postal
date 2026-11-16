@@ -3,6 +3,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
+# The mysqld-run volume shares the unix socket of MariaDB with the worker
+# when it runs with the host network.
+
 [Unit]
 Description=Podman mariadb-app.service
 BindsTo=postal.service
@@ -24,6 +27,7 @@ ExecStart=/usr/bin/podman run --conmon-pidfile %t/mariadb-app.pid \
     --env-file database.env \
     --env MARIADB_AUTO_UPGRADE=1 \
     --volume mysql-data:/var/lib/mysql/:Z \
+    --volume mysqld-run:/run/mysqld:z \
     ${MARIADB_IMAGE}
 ExecStartPost=runagent postal-wait-ready mariadb
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/mariadb-app.ctr-id -t 10

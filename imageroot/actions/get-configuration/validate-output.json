@@ -423,6 +423,22 @@
                     }
                 }
             }
+        },
+        "worker_host_network": {
+            "type": "boolean",
+            "description": "Run the Postal worker with the network of the node (--network=host), so the IP pools can bind any address of the node"
+        },
+        "rspamd_container": {
+            "type": "boolean",
+            "description": "Run rspamd in the pod and let Postal use it"
+        },
+        "rspamd_webui": {
+            "type": "boolean",
+            "description": "Publish the rspamd web interface on https://<host>/rspamd (requires rspamd_container)"
+        },
+        "clamav_container": {
+            "type": "boolean",
+            "description": "Run ClamAV in the pod and let Postal use it (about 1 GB of memory)"
         }
     }
 }

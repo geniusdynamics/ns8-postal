@@ -1,0 +1,43 @@
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Optional rspamd of the pod, used by Postal to inspect the messages
+# (normal worker 127.0.0.1:11333 in the pod). The controller (11334) is
+# published on 127.0.0.2:${TCP_PORT} for the Traefik route of its web
+# interface and for the host-network worker. Started only while the
+# rspamd_container setting is on (rspamd/enabled).
+
+[Unit]
+Description=rspamd for Postal
+BindsTo=postal.service
+After=postal.service
+Before=postal-worker-app.service
+ConditionPathExists=%S/state/rspamd/enabled
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=%S/state/environment
+WorkingDirectory=%S/state
+Restart=always
+RestartSec=10
+TimeoutStartSec=180
+TimeoutStopSec=70
+ExecStartPre=/bin/rm -f %t/rspamd-app.pid %t/rspamd-app.ctr-id
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/rspamd-app.pid \
+    --cidfile %t/rspamd-app.ctr-id --cgroups=no-conmon \
+    --pod-id-file %t/postal.pod-id --replace -d --name rspamd-app \
+    --env-file rspamd.env \
+    --volume ./rspamd/override.d:/etc/rspamd/override.d:z \
+    --volume rspamd-data:/var/lib/rspamd:Z \
+    ${RSPAMD_IMAGE}
+ExecStartPost=runagent postal-wait-ready rspamd
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/rspamd-app.ctr-id -t 10
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/rspamd-app.ctr-id
+PIDFile=%t/rspamd-app.pid
+Type=forking
+SyslogIdentifier=%u
+
+[Install]
+WantedBy=default.target

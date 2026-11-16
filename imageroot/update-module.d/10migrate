@@ -29,6 +29,7 @@ settings = postal.coerce(postal.load_settings())
 postal.save_settings(settings)
 agent.set_env("POSTAL_SMTP_PORT", settings["smtp_port"])
 agent.set_env("POSTAL_SMTP_HOSTNAME", postal.smtp_hostname(settings))
+postal.set_unit_env(settings)
 
 if settings["smtp_tls"]:
     try:

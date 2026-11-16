@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# The password of the rspamd web interface. Not a list-/get-/show-/read-
+# action: the builtin reader role cannot run it, only the administrators
+# of the module.
+
+import json
+import os
+import sys
+import agent
+import postal_ns8 as postal
+
+env = postal.read_env(postal.RSPAMD_ENV)
+if not env.get("RSPAMD_CONTROLLER_PASSWORD"):
+    agent.set_status('validation-failed')
+    json.dump([{'field': 'rspamd_container', 'parameter': 'rspamd_container', 'value': False,
+                'error': 'rspamd_container_required'}], fp=sys.stdout)
+    sys.exit(3)
+json.dump({"password": env["RSPAMD_CONTROLLER_PASSWORD"],
+           "url": f"https://{os.environ.get('TRAEFIK_HOST', '')}{postal.RSPAMD_PATH}/"}, fp=sys.stdout)

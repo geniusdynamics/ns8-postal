@@ -25,4 +25,5 @@ fi
 rm -f .restart-set.json
 systemctl --user restart postal.service mariadb-app.service
 postal-db-init
-systemctl --user start postal-app.service postal-smtp-app.service postal-worker-app.service
+# rspamd-app and clamav-app start only while their setting is on
+systemctl --user start rspamd-app.service clamav-app.service postal-app.service postal-smtp-app.service postal-worker-app.service

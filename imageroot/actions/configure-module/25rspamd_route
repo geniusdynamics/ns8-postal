@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Web interface of the rspamd container on https://<host>/rspamd, like
+# ns8-mail: a Traefik route <module>-rspamd to the controller, published by
+# the pod on 127.0.0.2:${TCP_PORT}. The controller asks its password for
+# every request (secure_ip trusts no address). Off: the route is removed.
+
+import os
+import agent
+import agent.tasks
+import postal_ns8 as postal
+
+settings = postal.load_settings()
+route_id = os.environ['MODULE_ID'] + '-rspamd'
+traefik_id = agent.resolve_agent_id('traefik@node')
+agent.assert_exp(traefik_id is not None, "no Traefik instance on the node")
+
+if settings["rspamd_container"] and settings["rspamd_webui"]:
+    response = agent.tasks.run(
+        agent_id=traefik_id,
+        action='set-route',
+        data={
+            'instance': route_id,
+            'url': f"http://{postal.RSPAMD_LOOPBACK}:{os.environ['TCP_PORT']}",
+            'host': settings["host"],
+            'path': postal.RSPAMD_PATH,
+            'http2https': True,
+            'lets_encrypt': False,  # the certificate of the host comes with the main route
+            'strip_prefix': True,
+            'slash_redirect': True,
+        },
+        extra={'isNotificationHidden': True},
+    )
+    agent.assert_exp(response['exit_code'] == 0, "set-route of the rspamd web interface failed")
+else:
+    response = agent.tasks.run(agent_id=traefik_id, action='get-route', data={'instance': route_id},
+                               extra={'isNotificationHidden': True})
+    if response['exit_code'] == 0 and response.get('output'):
+        agent.tasks.run(agent_id=traefik_id, action='delete-route', data={'instance': route_id},
+                        extra={'isNotificationHidden': True})

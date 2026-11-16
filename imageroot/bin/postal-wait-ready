@@ -9,7 +9,7 @@
 # ExecStartPost of the units: the unit is started only once its service
 # answers.
 #
-# Usage: postal-wait-ready mariadb|web|smtp|worker [timeout seconds]
+# Usage: postal-wait-ready mariadb|web|smtp|worker|rspamd [timeout seconds]
 #
 
 import os
@@ -62,11 +62,19 @@ def smtp():
 
 
 def worker():
+    import postal_ns8 as postal
     subprocess.run(["podman", "exec", "postal-worker-app", "curl", "-sf", "-o", "/dev/null",
-                    "http://127.0.0.1:9090/health"], check=True, capture_output=True, timeout=20)
+                    postal.worker_health_url()], check=True, capture_output=True, timeout=20)
 
 
-check = {"mariadb": mariadb, "web": web, "smtp": smtp, "worker": worker}[component]
+def rspamd():
+    # The unauthenticated /ping of the controller
+    subprocess.run(["podman", "exec", "rspamd-app", "bash", "-c",
+                    'exec 3<>/dev/tcp/127.0.0.1/11334; printf "GET /ping HTTP/1.0\\r\\n\\r\\n" >&3; grep -q pong <&3'],
+                   check=True, capture_output=True, timeout=20)
+
+
+check = {"mariadb": mariadb, "web": web, "smtp": smtp, "worker": worker, "rspamd": rspamd}[component]
 deadline = time.time() + timeout
 last = None
 while time.time() < deadline:

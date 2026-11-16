@@ -1,0 +1,38 @@
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Optional ClamAV of the pod, used by Postal to scan the messages (clamd
+# 127.0.0.1:3310 in the pod, 127.0.0.3:${TCP_PORT} for the host-network
+# worker). It needs about 1 GB of memory, and downloads its signatures
+# (freshclam) before clamd answers: the unit does not wait for it. Started
+# only while the clamav_container setting is on (.clamav-enabled).
+
+[Unit]
+Description=ClamAV for Postal
+BindsTo=postal.service
+After=postal.service
+ConditionPathExists=%S/state/.clamav-enabled
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=%S/state/environment
+WorkingDirectory=%S/state
+Restart=always
+RestartSec=10
+TimeoutStopSec=70
+ExecStartPre=/bin/rm -f %t/clamav-app.pid %t/clamav-app.ctr-id
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/clamav-app.pid \
+    --cidfile %t/clamav-app.ctr-id --cgroups=no-conmon \
+    --pod-id-file %t/postal.pod-id --replace -d --name clamav-app \
+    --volume clamav-db:/var/lib/clamav:Z \
+    ${CLAMAV_IMAGE}
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/clamav-app.ctr-id -t 10
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/clamav-app.ctr-id
+PIDFile=%t/clamav-app.pid
+Type=forking
+SyslogIdentifier=%u
+
+[Install]
+WantedBy=default.target

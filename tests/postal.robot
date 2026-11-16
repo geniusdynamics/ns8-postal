@@ -219,6 +219,72 @@ Remove the route of a deleted track domain
     ${routes} =    Traefik routes
     Should Not Contain    ${routes}    ${module_id}-track-${TRACK_HOST}
 
+Run the worker with the network of the node
+    ${rc}    ${out} =    Run configure-module    {"host":"${HOST}","worker_host_network":true}
+    Should Be Equal As Integers    ${rc}    0
+    ${mode} =    Execute Command    runagent -m ${module_id} podman inspect -f '{{.HostConfig.NetworkMode}}' postal-worker-app
+    Should Be Equal    ${mode.strip()}    host
+
+Bind the primary address of the node from the worker
+    ${ip} =    Execute Command    ip -4 route get 1.1.1.1 | sed -n 's/.* src \([0-9.]*\).*/\1/p'
+    ${ip} =    Set Variable    ${ip.strip()}
+    Should Not Be Empty    ${ip}
+    ${ruby} =    Catenate
+    ...    ip = Struct.new(:ipv4, :ipv6, :hostname).new("${ip}", nil, "${HOST}");
+    ...    ep = SMTPClient::Endpoint.new(SMTPClient::Server.new("${ip}", port: ${SMTP_PORT}, ssl_mode: "None"), "${ip}");
+    ...    ep.start_smtp_session(source_ip_address: ip, allow_ssl: false);
+    ...    puts "source=" + ep.smtp_client.source_address.to_s;
+    ...    ep.finish_smtp_session;
+    ...    puts "db=" + Organization.count.to_s
+    ${out}    ${err}    ${rc} =    Execute Command    runagent -m ${module_id} podman exec postal-worker-app bundle exec rails runner '${ruby}'
+    ...    return_rc=True    return_stderr=True
+    Should Be Equal As Integers    ${rc}    0    ${err}
+    Should Contain    ${out}    source=${ip}
+    Should Contain    ${out}    db=
+
+Run rspamd in the pod with its web interface
+    ${rc}    ${out} =    Run configure-module    {"host":"${HOST}","rspamd_container":true,"rspamd_webui":true}
+    Should Be Equal As Integers    ${rc}    0
+    ${out}    ${rc} =    Execute Command    runagent -m ${module_id} podman exec postal-app cat /config/postal.yml
+    ...    return_rc=True
+    Should Contain    ${out}    port: 11333
+    ${out} =    Get configuration
+    &{conf} =    Evaluate    json.loads($out)    modules=json
+    Should Be True    ${conf.rspamd_container}
+    Should Not Contain    ${out}    CONTROLLER_PASSWORD
+    # The worker, on the network of the node, reaches the rspamd controller
+    ${out}    ${rc} =    Execute Command    runagent -m ${module_id} bash -c 'podman exec postal-worker-app curl -s http://127.0.0.2:$TCP_PORT/ping'
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0
+    Should Contain    ${out}    pong
+
+Ask the rspamd password through Traefik
+    ${out}    ${rc} =    Execute Command    api-cli run module/${module_id}/reveal-rspamd-password
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0
+    &{reveal} =    Evaluate    json.loads($out)    modules=json
+    Should Not Be Empty    ${reveal.password}
+    ${anonymous} =    Execute Command    curl -k -s -o /dev/null -w '\%{http_code}' --resolve ${HOST}:443:127.0.0.1 https://${HOST}/rspamd/stat
+    Should Be Equal    ${anonymous}    403
+    ${authorized} =    Execute Command    curl -k -s -o /dev/null -w '\%{http_code}' -H 'Password: ${reveal.password}' --resolve ${HOST}:443:127.0.0.1 https://${HOST}/rspamd/stat
+    Should Be Equal    ${authorized}    200
+    ${page} =    Execute Command    curl -k -s --resolve ${HOST}:443:127.0.0.1 https://${HOST}/rspamd/
+    Should Contain    ${page}    Rspamd
+
+Switch the worker back to the pod and rspamd off
+    ${rc}    ${out} =    Run configure-module    {"host":"${HOST}","worker_host_network":false,"rspamd_container":false,"rspamd_webui":false}
+    Should Be Equal As Integers    ${rc}    0
+    ${mode} =    Execute Command    runagent -m ${module_id} podman inspect -f '{{.HostConfig.NetworkMode}}' postal-worker-app
+    Should Not Be Equal    ${mode.strip()}    host
+    ${out}    ${rc} =    Execute Command    runagent -m ${module_id} podman exec postal-worker-app curl -sf http://127.0.0.1:9090/health
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0
+    ${rc} =    Execute Command    runagent -m ${module_id} podman container exists rspamd-app
+    ...    return_stdout=False    return_rc=True
+    Should Not Be Equal As Integers    ${rc}    0
+    ${status} =    Execute Command    curl -k -s -o /dev/null -w '\%{http_code}' --resolve ${HOST}:443:127.0.0.1 https://${HOST}/rspamd/stat
+    Should Not Be Equal    ${status}    200
+
 Check the database dump of the backup
     ${out}    ${rc} =    Execute Command    runagent -m ${module_id} bash -c 'module-dump-state && grep -c "CREATE DATABASE" postal.sql && module-cleanup-state'
     ...    return_rc=True

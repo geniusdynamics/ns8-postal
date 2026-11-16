@@ -43,13 +43,14 @@ buildah add "${container}" ui/dist /ui
 #   name for STARTTLS (get-certificate, set-certificate)
 # - node:fwadm: open the SMTP port of the pod on the node firewall
 # - one TCP port: the web interface, published on 127.0.0.1 for Traefik
-# - images: Postal and MariaDB, pinned versions tracked by Renovate
+# - images: Postal and MariaDB, and the optional rspamd and ClamAV, pinned
+#   versions tracked by Renovate
 buildah config --entrypoint=/ \
 	--label="org.nethserver.authorizations=traefik@node:fulladm node:fwadm" \
 	--label="org.nethserver.tcp-ports-demand=1" \
 	--label="org.nethserver.rootfull=0" \
 	--label="org.nethserver.min-core=3.0.0" \
-	--label="org.nethserver.images=ghcr.io/postalserver/postal:3.3.7 docker.io/mariadb:13.0.2" \
+	--label="org.nethserver.images=ghcr.io/postalserver/postal:3.3.7 docker.io/mariadb:13.0.2 docker.io/rspamd/rspamd:4.3.0 docker.io/clamav/clamav:1.5.4" \
 	"${container}"
 # Commit the image
 buildah commit "${container}" "${repobase}/${reponame}"

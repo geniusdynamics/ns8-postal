@@ -268,10 +268,39 @@
                     }}</template>
                   </NsToggle>
                   <NsInlineNotification
-                    v-if="form.use_ip_pools"
+                    v-if="form.use_ip_pools && !form.worker_host_network"
                     kind="warning"
                     :title="$t('settings.ip_pools_limits')"
                     :description="$t('settings.ip_pools_limits_description')"
+                    :showCloseButton="false"
+                  />
+                  <NsToggle
+                    value="workerHostNetwork"
+                    :label="$t('settings.worker_host_network')"
+                    v-model="form.worker_host_network"
+                    :disabled="busy"
+                    class="mg-bottom"
+                  >
+                    <template #tooltip>{{
+                      $t("settings.worker_host_network_tooltip")
+                    }}</template>
+                    <template slot="text-left">{{
+                      $t("settings.disabled")
+                    }}</template>
+                    <template slot="text-right">{{
+                      $t("settings.enabled")
+                    }}</template>
+                  </NsToggle>
+                  <p class="mg-bottom helper">
+                    {{ $t("settings.worker_host_network_description") }}
+                  </p>
+                  <NsInlineNotification
+                    v-if="form.worker_host_network"
+                    kind="info"
+                    :title="$t('settings.worker_host_network_tradeoff')"
+                    :description="
+                      $t('settings.worker_host_network_tradeoff_description')
+                    "
                     :showCloseButton="false"
                   />
                   <h5 class="mg-bottom-sm">
@@ -717,8 +746,113 @@
                   <p class="mg-bottom">
                     {{ $t("settings.inspection_description") }}
                   </p>
+                  <NsToggle
+                    value="rspamdContainer"
+                    :label="$t('settings.rspamd_container')"
+                    v-model="form.rspamd_container"
+                    :disabled="busy"
+                    class="mg-bottom"
+                    ref="rspamd_container"
+                  >
+                    <template #tooltip>{{
+                      $t("settings.rspamd_container_tooltip")
+                    }}</template>
+                    <template slot="text-left">{{
+                      $t("settings.disabled")
+                    }}</template>
+                    <template slot="text-right">{{
+                      $t("settings.enabled")
+                    }}</template>
+                  </NsToggle>
+                  <template v-if="form.rspamd_container">
+                    <NsToggle
+                      value="rspamdWebui"
+                      :label="$t('settings.rspamd_webui')"
+                      v-model="form.rspamd_webui"
+                      :disabled="busy"
+                      class="mg-bottom"
+                      ref="rspamd_webui"
+                    >
+                      <template #tooltip>{{
+                        $t("settings.rspamd_webui_tooltip")
+                      }}</template>
+                      <template slot="text-left">{{
+                        $t("settings.disabled")
+                      }}</template>
+                      <template slot="text-right">{{
+                        $t("settings.enabled")
+                      }}</template>
+                    </NsToggle>
+                    <NsInlineNotification
+                      v-if="error.rspamd_webui"
+                      kind="error"
+                      :title="$t('settings.rspamd_webui')"
+                      :description="error.rspamd_webui"
+                      :showCloseButton="false"
+                    />
+                    <div v-if="rspamdWebuiActive" class="mg-bottom">
+                      <NsButton
+                        kind="ghost"
+                        :icon="Launch20"
+                        @click="openRspamd"
+                        >{{ $t("settings.open_rspamd") }}</NsButton
+                      >
+                      <NsButton
+                        kind="ghost"
+                        :icon="Password20"
+                        :loading="loading.revealRspamdPassword"
+                        :disabled="loading.revealRspamdPassword"
+                        @click="revealRspamdPassword"
+                        >{{ $t("settings.show_rspamd_password") }}</NsButton
+                      >
+                      <NsCodeSnippet
+                        v-if="rspamdPassword"
+                        :copyTooltip="$t('settings.copy_to_clipboard')"
+                        :copyFeedback="$t('settings.copied')"
+                        :moreText="$t('settings.show_more')"
+                        :lessText="$t('settings.show_less')"
+                        light
+                        class="mg-top-sm"
+                        >{{ rspamdPassword }}</NsCodeSnippet
+                      >
+                      <NsInlineNotification
+                        v-if="error.revealRspamdPassword"
+                        kind="error"
+                        :title="$t('settings.show_rspamd_password')"
+                        :description="error.revealRspamdPassword"
+                        :showCloseButton="false"
+                      />
+                    </div>
+                  </template>
+                  <NsToggle
+                    value="clamavContainer"
+                    :label="$t('settings.clamav_container')"
+                    v-model="form.clamav_container"
+                    :disabled="busy"
+                    class="mg-bottom"
+                  >
+                    <template #tooltip>{{
+                      $t("settings.clamav_container_tooltip")
+                    }}</template>
+                    <template slot="text-left">{{
+                      $t("settings.disabled")
+                    }}</template>
+                    <template slot="text-right">{{
+                      $t("settings.enabled")
+                    }}</template>
+                  </NsToggle>
+                  <NsInlineNotification
+                    v-if="form.clamav_container"
+                    kind="warning"
+                    :title="$t('settings.clamav_memory')"
+                    :description="$t('settings.clamav_memory_description')"
+                    :showCloseButton="false"
+                  />
+                  <h5 class="mg-bottom-sm">
+                    {{ $t("settings.external_services") }}
+                  </h5>
                   <div
-                    v-for="svc in inspectionServices"
+                    v-for="svc in externalInspectionServices"
                     :key="svc"
                     class="mg-bottom"
                   >
@@ -956,6 +1090,8 @@ export default {
       smtpPort: "2525",
       smtpPortChoices: [],
       trackDomains: [],
+      rspamdPassword: "",
+      savedRspamdWebui: false,
       mxRecords: "",
       oidcPreset: "",
       oidcProviders: [],
@@ -1006,12 +1142,14 @@ export default {
         configureModule: false,
         initializePostal: false,
         listNodeAddresses: false,
+        revealRspamdPassword: false,
       },
       error: {
         getConfiguration: "",
         configureModule: "",
         initializePostal: "",
         listNodeAddresses: "",
+        revealRspamdPassword: "",
       },
     };
   },
@@ -1019,6 +1157,14 @@ export default {
     ...mapState(["instanceName", "core", "appName"]),
     busy() {
       return this.loading.getConfiguration || this.loading.configureModule;
+    },
+    externalInspectionServices() {
+      return this.inspectionServices.filter(
+        (svc) => svc === "spamd" || !this.form[svc + "_container"]
+      );
+    },
+    rspamdWebuiActive() {
+      return this.savedRspamdWebui && this.form.rspamd_webui;
     },
     smtpPortOptions() {
       const choices = this.smtpPortChoices.length
@@ -1109,6 +1255,18 @@ export default {
     },
   },
   watch: {
+    "form.rspamd_container"(value) {
+      if (value) {
+        this.$set(this.form, "rspamd_enabled", false);
+      } else {
+        this.$set(this.form, "rspamd_webui", false);
+      }
+    },
+    "form.clamav_container"(value) {
+      if (value) {
+        this.$set(this.form, "clamav_enabled", false);
+      }
+    },
     smtpPort(value) {
       const port = parseInt(value, 10);
       this.$set(this.form, "smtp_port", isNaN(port) ? value : port);
@@ -1199,6 +1357,10 @@ export default {
       this.smtpPort = String(config.smtp_port);
       this.smtpPortChoices = config.smtp_port_choices || [];
       this.trackDomains = config.track_domains || [];
+      this.savedRspamdWebui = !!(
+        config.rspamd_container && config.rspamd_webui
+      );
+      this.rspamdPassword = "";
       for (const field of SECRET_FIELDS) {
         this.secretsSet[field] = !!config[field + "_set"];
         this.secrets[field] = "";
@@ -1266,6 +1428,41 @@ export default {
         this.form.oidc_identifier = "postal";
       }
       this.focusElement("oidc_issuer");
+    },
+    openRspamd() {
+      window.open(`https://${this.form.host}/rspamd/`, "_blank");
+    },
+    async revealRspamdPassword() {
+      this.loading.revealRspamdPassword = true;
+      this.error.revealRspamdPassword = "";
+      const err = await this.runTask(
+        "reveal-rspamd-password",
+        {},
+        {
+          title: this.$t("settings.show_rspamd_password"),
+          isNotificationHidden: true,
+        },
+        {
+          completed: (taskContext, taskResult) => {
+            this.rspamdPassword = taskResult.output.password;
+            this.loading.revealRspamdPassword = false;
+          },
+          aborted: () => {
+            this.error.revealRspamdPassword = this.$t("error.generic_error");
+            this.loading.revealRspamdPassword = false;
+          },
+          "validation-failed": () => {
+            this.error.revealRspamdPassword = this.$t(
+              "settings.rspamd_container_required"
+            );
+            this.loading.revealRspamdPassword = false;
+          },
+        }
+      );
+      if (err) {
+        this.error.revealRspamdPassword = this.getErrorMessage(err);
+        this.loading.revealRspamdPassword = false;
+      }
     },
     trackStatusKind(status) {
       return (
@@ -1432,6 +1629,10 @@ export default {
 
 .helper {
   color: $text-02;
+}
+
+.mg-top-sm {
+  margin-top: $spacing-03;
 }
 
 .track-domain {
