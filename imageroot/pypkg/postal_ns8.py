@@ -56,6 +56,7 @@ CLAMAV_FLAG = ".clamav-enabled"      # ConditionPathExists of clamav-app.service
 # to one pod port only, whatever the address: they need ports of their own.
 # The worker of the host network runs its health server on 127.0.0.4 with
 # the web TCP port, which the pod publishes on 127.0.0.1 only.
+RSPAMD_PATH = "/rspamd"              # web UI path on the Postal host name
 WORKER_HEALTH_LOOPBACK = "127.0.0.4" # health server of the host-network worker
 TLS_DIR = "tls"
 TLS_CERT = "tls/cert.pem"
