@@ -1,0 +1,28 @@
+#!/bin/ash
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Render the templates (from the image of ns8-mail) and reload rspamd
+
+# shellcheck shell=dash
+
+set -e
+
+set -a
+ipv6=$(sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null || echo 1)
+if [ "${ipv6}" = 1 ]; then
+    unbound_ipv6="no"
+else
+    unbound_ipv6="yes"
+fi
+set +a
+
+envsubst >/etc/unbound/unbound.conf </usr/local/templates/unbound.conf
+
+main_process=$(pgrep 'rspamd: main process' || :)
+if [ -n "${main_process}" ]; then
+    kill -HUP "${main_process}"
+fi

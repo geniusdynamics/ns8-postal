@@ -42,6 +42,22 @@ SIGNING_KEY = "secrets/signing.key"
 DATABASE_ENV = "database.env"
 POSTAL_YML = "postal.yml"
 POSTAL_ENV = "postal.env"
+WORKER_ENV = "postal-worker.env"     # 0600, extra variables of the worker
+RSPAMD_DIR = "rspamd"                # files mounted in the rspamd container
+RSPAMD_CONTROLLER_FILE = "rspamd/worker-controller.inc"
+RSPAMD_ENV = "rspamd.env"            # 0600, RSPAMD_adminpw; ConditionPathExists of rspamd-app.service
+RSPAMD_ROUTE_STATE = ".rspamd-route.json"
+CLAMAV_FLAG = ".clamav-enabled"      # ConditionPathExists of clamav-app.service
+
+# The pod publishes the rspamd controller and clamd of the optional
+# containers on 127.0.0.1 of the node, on the second and third TCP ports of
+# the module (TCP_PORTS; an install older than tcp-ports-demand=3 gets them
+# from the node agent, POSTAL_EXTRA_TCP_PORTS). pasta forwards a host port
+# to one pod port only, whatever the address: they need ports of their own.
+# The worker of the host network runs its health server on 127.0.0.4 with
+# the web TCP port, which the pod publishes on 127.0.0.1 only.
+RSPAMD_PATH = "/rspamd"              # web UI path on the Postal host name
+WORKER_HEALTH_LOOPBACK = "127.0.0.4" # health server of the host-network worker
 TLS_DIR = "tls"
 TLS_CERT = "tls/cert.pem"
 TLS_KEY = "tls/key.pem"
@@ -161,10 +177,15 @@ DEFAULTS = {
     # Advanced
     "trusted_proxies": [],
     "allowed_request_destinations": [],
+    # Optional containers and worker network
+    "worker_host_network": False,     # worker outside the pod, --network=host (IP pools)
+    "rspamd_container": False,        # rspamd in the pod, used by Postal
+    "rspamd_webui": False,            # https://<host>/rspamd through Traefik
+    "clamav_container": False,        # ClamAV in the pod, used by Postal (~1 GB RAM)
 }
 
 # Write-only secrets: configure-module field -> secrets.env variable
-SECRET_FIELDS = {
+SECRET_FIELDS = {  # rspamd controller password: generated, see rspamd_password()
     "oidc_secret": "OIDC_SECRET",
     "app_smtp_password": "SMTP_PASSWORD",
     "rspamd_password": "RSPAMD_PASSWORD",
@@ -693,6 +714,12 @@ def render(settings, mark=True):
             "host": settings["rspamd_host"] or "127.0.0.1",
             "port": settings["rspamd_port"],
             "ssl": settings["rspamd_ssl"],
+        } if not settings["rspamd_container"] else {
+            # The normal worker of the rspamd container of the pod
+            "enabled": True,
+            "host": "127.0.0.1",
+            "port": 11333,
+            "ssl": False,
         },
         "spamd": {
             "enabled": settings["spamd_enabled"],
@@ -703,6 +730,10 @@ def render(settings, mark=True):
             "enabled": settings["clamav_enabled"],
             "host": settings["clamav_host"] or "127.0.0.1",
             "port": settings["clamav_port"],
+        } if not settings["clamav_container"] else {
+            "enabled": True,
+            "host": "127.0.0.1",
+            "port": 3310,
         },
         "smtp_client": {
             "open_timeout": settings["smtp_client_open_timeout"],
@@ -731,7 +762,7 @@ def render(settings, mark=True):
         conf["dns"]["helo_hostname"] = settings["helo_hostname"]
     if settings["gelf_host"]:
         conf["gelf"]["host"] = settings["gelf_host"]
-    if settings["rspamd_flags"]:
+    if settings["rspamd_flags"] and not settings["rspamd_container"]:
         conf["rspamd"]["flags"] = settings["rspamd_flags"]
     if not settings["oidc_discovery"]:
         for key in ("authorization_endpoint", "token_endpoint", "userinfo_endpoint", "jwks_uri"):
@@ -760,12 +791,22 @@ def render(settings, mark=True):
         env["OIDC_SECRET"] = sec["OIDC_SECRET"]
     if smtp_password:
         env["SMTP_PASSWORD"] = smtp_password
-    if settings["rspamd_enabled"] and sec.get("RSPAMD_PASSWORD"):
+    if settings["rspamd_enabled"] and not settings["rspamd_container"] and sec.get("RSPAMD_PASSWORD"):
         env["RSPAMD_PASSWORD"] = sec["RSPAMD_PASSWORD"]
     if sec.get("LOGGING_SENTRY_DSN"):
         env["LOGGING_SENTRY_DSN"] = sec["LOGGING_SENTRY_DSN"]
     write_env(POSTAL_ENV, env)
-    affected = changed_containers(conf, env)
+    render_rspamd(settings)
+    render_clamav(settings)
+    worker_env = render_worker_env(settings)
+    write_env(WORKER_ENV, worker_env)
+    affected = changed_containers(conf, env, {
+        "worker_env": worker_env,
+        "rspamd": rspamd_state(settings),
+        "clamav": settings["clamav_container"],
+        "pod_publish": pod_publish(settings),
+        "worker_network": worker_network_args(settings),
+    })
     if mark:
         mark_restart(affected)
     return affected, sorted(set(warnings))
@@ -782,6 +823,11 @@ UNITS = {
     "web": "postal-app.service",
     "smtp": "postal-smtp-app.service",
     "worker": "postal-worker-app.service",
+}
+# Optional containers: started only while their flag file exists
+OPTIONAL_UNITS = {
+    "rspamd": ("rspamd-app.service", RSPAMD_ENV),
+    "clamav": ("clamav-app.service", CLAMAV_FLAG),
 }
 
 # postal.yml section -> Postal processes reading it
@@ -817,9 +863,20 @@ def _digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
-def changed_containers(conf, env):
-    """Containers reading a section of conf or a variable of env that
-    differs from the previous rendering"""
+# Other rendered values -> containers
+EXTRA_RESTART_MAP = {
+    "worker_env": ["worker"],
+    "rspamd": ["rspamd", "worker"],
+    "clamav": ["clamav", "worker"],
+    "pod_publish": [POD],              # ports published by the pod
+    "worker_network": ["worker"],
+}
+
+
+def changed_containers(conf, env, extra=None):
+    """Containers reading a section of conf, a variable of env or a value
+    of extra that differs from the previous rendering"""
+    extra = extra or {}
     try:
         with open(RENDERED_STATE) as fp:
             previous = json.load(fp)
@@ -828,6 +885,7 @@ def changed_containers(conf, env):
     current = {
         "conf": {section: _digest(values) for section, values in conf.items()},
         "env": {key: _digest(value) for key, value in env.items()},
+        "extra": {key: _digest(value) for key, value in extra.items()},
     }
     write_file(RENDERED_STATE, json.dumps(current, indent=1, sort_keys=True) + "\n", 0o600)
     if previous is None:
@@ -839,6 +897,9 @@ def changed_containers(conf, env):
     for key in set(current["env"]) | set(previous.get("env", {})):
         if current["env"].get(key) != previous.get("env", {}).get(key):
             affected.update(ENV_RESTART_MAP.get(key, ["web", "smtp", "worker"]))
+    for key in current["extra"]:
+        if key in previous.get("extra", {}) and current["extra"][key] != previous["extra"][key]:
+            affected.update(EXTRA_RESTART_MAP[key])
     return affected
 
 
@@ -1062,6 +1123,18 @@ def validate(data, current, settings, updates):
         if not re.match(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", settings[key] or ""):
             error(key, settings[key], "invalid_label")
 
+    # Optional containers and the worker network
+    if needs_extra_ports(settings) and not extra_ports() and not hasattr(agent, "allocate_ports"):
+        error("rspamd_container" if settings["rspamd_container"] else "clamav_container", True,
+              "ports_unavailable")
+    if settings["rspamd_webui"] and not settings["rspamd_container"]:
+        error("rspamd_webui", True, "rspamd_container_required")
+    if settings["rspamd_container"] and settings["rspamd_enabled"]:
+        # One rspamd: the container replaces an external one
+        error("rspamd_enabled", True, "rspamd_container_and_external")
+    if settings["clamav_container"] and settings["clamav_enabled"]:
+        error("clamav_enabled", True, "clamav_container_and_external")
+
     # Processes
     if settings["main_db_pool_size"] < max(settings["web_server_max_threads"], settings["worker_threads"]):
         error("main_db_pool_size", settings["main_db_pool_size"], "pool_below_threads")
@@ -1183,3 +1256,174 @@ def smtp_port_choices():
         log(agent.SD_WARNING + f"Cannot list the mail modules of the node: {ex}")
         taken = {}
     return [{"port": port, "used_by": taken.get(port, "")} for port in (2525, 25, 587)]
+
+
+# --------------------------------------------------------------------------
+# Optional containers and the host-network worker
+# --------------------------------------------------------------------------
+
+def rspamd_password():
+    """The rspamd controller password, generated when rspamd is enabled
+    (state/rspamd.env, 0600, like ns8-mail); "" while it is off"""
+    return read_env(RSPAMD_ENV).get("RSPAMD_adminpw", "")
+
+
+def rspamd_state(settings):
+    return {"container": settings["rspamd_container"], "controller": RSPAMD_CONTROLLER}
+
+
+RSPAMD_CONTROLLER = """# Generated by configure-module of ns8-postal: do not edit, changes are lost.
+# Mounted over override.d/worker-controller.inc of the rspamd container.
+# The controller listens on the pod network; the pod publishes it only on
+# 127.0.0.1 of the node (second TCP port of the module), for the route of the web
+# interface (Traefik injects the password for the users the NS8 api-server
+# authorizes) and for the Postal worker of the host network. No address is
+# trusted: every request needs the password.
+count = 1;
+bind_socket = "*:11334";
+password = "{= env.adminpw =}";
+enable_password = "{= env.adminpw =}";
+secure_ip = [];
+static_dir = "${WWWDIR}";
+"""
+
+
+def render_rspamd(settings):
+    if not settings["rspamd_container"]:
+        # rspamd.env is the ConditionPathExists of rspamd-app.service
+        try:
+            os.unlink(RSPAMD_ENV)
+        except FileNotFoundError:
+            pass
+        return
+    if not rspamd_password():
+        write_env(RSPAMD_ENV, {"RSPAMD_adminpw": secrets.token_urlsafe(24)})
+    os.makedirs(RSPAMD_DIR, exist_ok=True)
+    write_file(RSPAMD_CONTROLLER_FILE, RSPAMD_CONTROLLER, 0o644)
+
+
+def rspamd_route_status():
+    """{"status": "published"|"off"|"conflict", "owner": route instance}"""
+    try:
+        with open(RSPAMD_ROUTE_STATE) as fp:
+            return json.load(fp)
+    except (FileNotFoundError, ValueError):
+        return {"status": "off", "owner": ""}
+
+
+def render_clamav(settings):
+    if settings["clamav_container"]:
+        write_file(CLAMAV_FLAG, "1\n", 0o644)
+    else:
+        try:
+            os.unlink(CLAMAV_FLAG)
+        except FileNotFoundError:
+            pass
+
+
+def extra_ports():
+    """(rspamd controller port, clamd port) of the node, or None"""
+    ports = [int(p) for p in os.environ.get("TCP_PORTS", "").split(",") if p.strip().isdigit()]
+    if len(ports) >= 3:
+        return ports[1], ports[2]
+    ports = [int(p) for p in os.environ.get("POSTAL_EXTRA_TCP_PORTS", "").split(",") if p.strip().isdigit()]
+    if len(ports) == 2:
+        return ports[0], ports[1]
+    return None
+
+
+def needs_extra_ports(settings):
+    return settings["rspamd_container"] or settings["clamav_container"]
+
+
+def ensure_extra_ports():
+    """Allocate the two ports of the optional containers for an install
+    created with one TCP port (older releases). Returns the ports."""
+    found = extra_ports()
+    if found:
+        return found
+    start, end = agent.allocate_ports(2, "tcp", keep_existing=True)
+    agent.set_env("POSTAL_EXTRA_TCP_PORTS", f"{start},{start + 1}")
+    os.environ["POSTAL_EXTRA_TCP_PORTS"] = f"{start},{start + 1}"
+    log(f"Allocated the TCP ports {start} and {start + 1} for rspamd and ClamAV")
+    return start, start + 1
+
+
+def rspamd_url():
+    ports = extra_ports()
+    return f"http://127.0.0.1:{ports[0]}" if ports else ""
+
+
+def pod_publish(settings):
+    """Extra --publish options of the pod (POSTAL_POD_PUBLISH)"""
+    ports = extra_ports()
+    args = []
+    if ports and settings["rspamd_container"]:
+        args.append(f"--publish=127.0.0.1:{ports[0]}:11334")
+    if ports and settings["clamav_container"] and settings["worker_host_network"]:
+        args.append(f"--publish=127.0.0.1:{ports[1]}:3310")
+    return " ".join(args)
+
+
+def worker_network_args(settings):
+    """podman run options of the worker network (POSTAL_WORKER_NETWORK_ARGS)"""
+    if settings["worker_host_network"]:
+        # MariaDB through its unix socket, shared by the mysqld-run volume:
+        # no TCP port of the database is published
+        return "--network=host --volume=mysqld-run:/run/mysqld:z"
+    return "--pod=postal"
+
+
+def render_worker_env(settings):
+    """Variables of the worker only (postal-worker.env, 0600): with the
+    host network, the addresses of the pod services seen from the node"""
+    if not settings["worker_host_network"]:
+        return {}
+    env = {
+        "MAIN_DB_HOST": "localhost",       # unix socket /run/mysqld/mysqld.sock
+        "MESSAGE_DB_HOST": "localhost",
+        "HEALTH_SERVER_BIND_ADDRESS": WORKER_HEALTH_LOOPBACK,
+        "HEALTH_SERVER_PORT": os.environ.get("TCP_PORT", "9090"),
+    }
+    ports = extra_ports()
+    if settings["rspamd_container"] and ports:
+        env.update({
+            "RSPAMD_HOST": "127.0.0.1",
+            "RSPAMD_PORT": str(ports[0]),
+            "RSPAMD_PASSWORD": rspamd_password(),
+        })
+    if settings["clamav_container"] and ports:
+        env.update({"CLAMAV_HOST": "127.0.0.1", "CLAMAV_PORT": str(ports[1])})
+    return env
+
+
+def worker_health_url():
+    if os.environ.get("POSTAL_WORKER_NETWORK_ARGS", "").startswith("--network=host"):
+        return f"http://{WORKER_HEALTH_LOOPBACK}:{os.environ.get('TCP_PORT', '9090')}/health"
+    return "http://127.0.0.1:9090/health"
+
+
+def set_unit_env(settings):
+    """Non-secret variables the units read (state/environment)"""
+    agent.set_env("POSTAL_POD_PUBLISH", pod_publish(settings))
+    agent.set_env("POSTAL_WORKER_NETWORK_ARGS", worker_network_args(settings))
+
+
+def rspamd_path_route_owner(host):
+    """Instance of another Traefik route serving <host>/rspamd, or "".
+    agent.http_route_in_use() cannot tell: the route of the Postal host
+    name itself answers on every path."""
+    import agent.tasks
+    try:
+        response = agent.tasks.run(agent_id=agent.resolve_agent_id("traefik@node"), action="list-routes",
+                                   data={"expand_list": True}, extra={"isNotificationHidden": True})
+    except Exception as ex:
+        log(agent.SD_WARNING + f"list-routes failed: {ex}")
+        return ""
+    ours = os.environ.get("MODULE_ID", "") + "-rspamd"
+    for route in response.get("output") or []:
+        if not isinstance(route, dict) or route.get("instance") == ours:
+            continue
+        if (route.get("host") or "").lower() == host and (route.get("path") or "").rstrip("/") == RSPAMD_PATH:
+            return route.get("instance", "")
+    return ""

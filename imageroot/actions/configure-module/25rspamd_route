@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Web interface of the rspamd container on https://<host>/rspamd, like the
+# 90traefik step of ns8-mail: a Traefik route <module>-rspamd to the
+# controller (published by the pod on 127.0.0.1, second TCP port). Traefik asks
+# the NS8 api-server (forward_auth) to check the login of an NS8
+# administrator of this module, then injects the controller password: the
+# rspamd password is never shown to anybody.
+#
+# ns8-mail routes /rspamd on every host name; this route is scoped to the
+# Postal host name, so the two coexist and the one of the Postal host name
+# wins there. Another route of the same host name and path is never
+# replaced: the step skips, and get-configuration reports the conflict.
+# Off: the route is removed.
+
+import json
+import os
+import agent
+import agent.tasks
+import postal_ns8 as postal
+
+settings = postal.load_settings()
+module_id = os.environ['MODULE_ID']
+route_id = module_id + '-rspamd'
+traefik_id = agent.resolve_agent_id('traefik@node')
+if traefik_id is None:
+    raise SystemExit(0)
+
+
+def save_status(status, owner=""):
+    postal.write_file(postal.RSPAMD_ROUTE_STATE, json.dumps({"status": status, "owner": owner}) + "\n")
+
+
+if settings["rspamd_container"] and settings["rspamd_webui"]:
+    owner = postal.rspamd_path_route_owner(settings["host"])
+    if owner:
+        postal.log(agent.SD_WARNING + f"{settings['host']}{postal.RSPAMD_PATH} is routed by {owner}: rspamd web interface skipped")
+        save_status("conflict", owner)
+        raise SystemExit(0)
+    postal.render_rspamd(settings)  # the password exists before the route
+    response = agent.tasks.run(
+        agent_id=traefik_id,
+        action='set-route',
+        data={
+            'instance': route_id,
+            'url': postal.rspamd_url(),
+            'host': settings["host"],
+            'path': postal.RSPAMD_PATH,
+            'http2https': True,
+            'lets_encrypt': False,  # the certificate of the host comes with the main route
+            'strip_prefix': True,
+            'slash_redirect': True,
+            'headers': {
+                'request': {
+                    'Password': postal.rspamd_password(),
+                },
+            },
+            'forward_auth': {
+                'skip_tls_verify': False,
+                'address': f"http://127.0.0.1:9311/api/module/{module_id}/http-basic/authorize-rspamd",
+            },
+        },
+        extra={'isNotificationHidden': True},
+    )
+    agent.assert_exp(response['exit_code'] == 0, "set-route of the rspamd web interface failed")
+    save_status("published")
+else:
+    # Remove our route (if it exists), ignoring errors
+    agent.tasks.run(agent_id=traefik_id, action='delete-route', data={'instance': route_id},
+                    extra={'isNotificationHidden': True})
+    save_status("off")
