@@ -226,7 +226,7 @@ Run the worker with the network of the node
     Should Be Equal    ${mode.strip()}    host
 
 Bind the primary address of the node from the worker
-    ${ip} =    Execute Command    ip -4 route get 1.1.1.1 | sed -n 's/.* src \([0-9.]*\).*/\1/p'
+    ${ip} =    Execute Command    ip -4 -o route get 1.1.1.1 | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}'
     ${ip} =    Set Variable    ${ip.strip()}
     Should Not Be Empty    ${ip}
     ${ruby} =    Catenate

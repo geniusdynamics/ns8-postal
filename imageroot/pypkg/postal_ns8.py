@@ -1125,7 +1125,7 @@ def validate(data, current, settings, updates):
     if settings["rspamd_webui"] and not settings["rspamd_container"]:
         error("rspamd_webui", True, "rspamd_container_required")
     elif settings["rspamd_webui"] and not current["rspamd_webui"] and \
-            agent.http_route_in_use(domain=settings["host"], path=RSPAMD_PATH):
+            rspamd_path_route_owner(settings["host"]):
         error("rspamd_webui", True, "rspamd_path_in_use")
     if settings["rspamd_container"] and settings["rspamd_enabled"]:
         # One rspamd: the container replaces an external one
@@ -1364,3 +1364,23 @@ def set_unit_env(settings):
     """Non-secret variables the units read (state/environment)"""
     agent.set_env("POSTAL_POD_PUBLISH", pod_publish(settings))
     agent.set_env("POSTAL_WORKER_NETWORK_ARGS", worker_network_args(settings))
+
+
+def rspamd_path_route_owner(host):
+    """Instance of another Traefik route serving <host>/rspamd, or "".
+    agent.http_route_in_use() cannot tell: the route of the Postal host
+    name itself answers on every path."""
+    import agent.tasks
+    try:
+        response = agent.tasks.run(agent_id=agent.resolve_agent_id("traefik@node"), action="list-routes",
+                                   data={"expand_list": True}, extra={"isNotificationHidden": True})
+    except Exception as ex:
+        log(agent.SD_WARNING + f"list-routes failed: {ex}")
+        return ""
+    ours = os.environ.get("MODULE_ID", "") + "-rspamd"
+    for route in response.get("output") or []:
+        if not isinstance(route, dict) or route.get("instance") == ours:
+            continue
+        if (route.get("host") or "").lower() == host and (route.get("path") or "").rstrip("/") == RSPAMD_PATH:
+            return route.get("instance", "")
+    return ""
