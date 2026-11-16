@@ -10,9 +10,12 @@
 # the node, opened in the firewall by configure-module.
 #
 
+# The pod Wants its containers, they are BindsTo it: starting or stopping
+# the pod starts or stops them all, and a container restarts alone. With
+# Requires= a restart of one container would restart the whole pod.
 [Unit]
 Description=Podman postal.service
-Requires=mariadb-app.service postal-app.service postal-smtp-app.service postal-worker-app.service
+Wants=mariadb-app.service postal-app.service postal-smtp-app.service postal-worker-app.service
 Before=mariadb-app.service postal-app.service postal-smtp-app.service postal-worker-app.service
 
 [Service]

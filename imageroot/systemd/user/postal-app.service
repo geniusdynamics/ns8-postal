@@ -5,7 +5,9 @@
 
 # Postal web server. postal.yml has no secrets; postal.env (0600) carries them as
 # environment variables, which Postal reads over postal.yml. The private
-# keys are podman secrets (bin/postal-secrets).
+# keys are podman secrets (bin/postal-secrets). The command is the one of
+# bin/postal, run without its bash wrapper: the Ruby process is PID 1 and
+# stops on SIGTERM instead of being killed after the stop timeout.
 
 [Unit]
 Description=Postal web server
@@ -28,7 +30,7 @@ ExecStart=/usr/bin/podman run --conmon-pidfile %t/postal-app.pid \
     --volume ./postal.yml:/config/postal.yml:z \
     --env-file postal.env \
     --secret postal-app-signing-key,type=mount,target=signing.key,uid=999,gid=999,mode=0400 \
-    ${POSTAL_IMAGE} postal web-server
+    ${POSTAL_IMAGE} bundle exec puma -C config/puma.rb
 ExecStartPost=runagent postal-wait-ready web
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/postal-app.ctr-id -t 10
 ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/postal-app.ctr-id
