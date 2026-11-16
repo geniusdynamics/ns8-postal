@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+#
+# ExecStartPost of the units: the unit is started only once its service
+# answers.
+#
+# Usage: postal-wait-ready mariadb|web|smtp|worker [timeout seconds]
+#
+
+import os
+import socket
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+
+component = sys.argv[1]
+timeout = int(sys.argv[2]) if len(sys.argv) > 2 else 240
+
+
+def mariadb():
+    env = {}
+    with open("database.env") as fp:
+        for line in fp:
+            if "=" in line:
+                key, value = line.rstrip("\n").split("=", 1)
+                env[key] = value
+    subprocess.run(["podman", "exec", "-e", "MYSQL_PWD=" + env["MARIADB_ROOT_PASSWORD"], "mariadb-app",
+                    "mariadb-admin", "ping", "-h", "127.0.0.1", "-u", "root", "--silent"],
+                   check=True, capture_output=True, timeout=20)
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def web():
+    # Any HTTP answer: Rails answers once Puma has booted
+    req = urllib.request.Request(f"http://127.0.0.1:{os.environ['TCP_PORT']}/login",
+                                 headers={"Host": os.environ.get("TRAEFIK_HOST") or "localhost"})
+    try:
+        urllib.request.build_opener(NoRedirect).open(req, timeout=10)
+    except urllib.error.HTTPError:
+        pass
+
+
+def smtp():
+    port = int(os.environ.get("POSTAL_SMTP_PORT") or 2525)
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+        sock.settimeout(10)
+        banner = sock.recv(512)
+        if not banner.startswith(b"220"):
+            raise RuntimeError(f"unexpected banner {banner!r}")
+        sock.sendall(b"QUIT\r\n")
+
+
+def worker():
+    subprocess.run(["podman", "exec", "postal-worker-app", "curl", "-sf", "-o", "/dev/null",
+                    "http://127.0.0.1:9090/health"], check=True, capture_output=True, timeout=20)
+
+
+check = {"mariadb": mariadb, "web": web, "smtp": smtp, "worker": worker}[component]
+deadline = time.time() + timeout
+last = None
+while time.time() < deadline:
+    try:
+        check()
+        sys.exit(0)
+    except Exception as ex:
+        if str(ex) != last:
+            print(f"{component} not ready yet: {ex}", file=sys.stderr)
+            last = str(ex)
+        time.sleep(3)
+print(f"{component} did not become ready in {timeout} seconds", file=sys.stderr)
+sys.exit(1)

@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Apply the cloned settings (core copied state/: settings.json, secrets,
+# database.env) with every field, and Let's Encrypt off: the DNS may not
+# point to this node yet.
+
+import os
+import agent
+import agent.tasks
+import postal_ns8 as postal
+
+postal.migrate_legacy()
+data = postal.configure_payload(postal.load_settings())
+
+# A clone on the node of its source cannot share its SMTP port: take the
+# next free one
+try:
+    taken = postal.ports_taken_on_node()
+except Exception:
+    taken = {}
+port = int(data["smtp_port"])
+while port in taken or postal.port_in_use(port):
+    port += 1
+if port != int(data["smtp_port"]):
+    postal.log(f"SMTP port {data['smtp_port']} is used on this node: the clone uses {port}")
+    data["smtp_port"] = port
+    data["cluster_relay_provider"] = False
+ret = agent.tasks.run(agent_id=os.environ['AGENT_ID'], action='configure-module', data=data)
+agent.assert_exp(ret['exit_code'] == 0, "The configure-module subtask failed!")

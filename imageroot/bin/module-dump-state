@@ -5,24 +5,43 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-set -e
-if [ -f database.env ]; then
-	set -a              # Export all variables automatically
-	source database.env # Load variables
-	set +a
-fi
+#
+# Dump every Postal database before the backup: the main database
+# ("postal") and the message database of each mail server
+# ("postal-server-<id>").
+#
 
-if ! systemctl --user -q is-active postal.service; then
+set -e -o pipefail
+exec 1>&2
+
+if ! systemctl --user -q is-active mariadb-app.service; then
+	echo "mariadb-app is not running: no database dump"
 	exit 0
 fi
 
-podman exec mariadb-app mariadb-dump \
-	--databases postal \
-	--user=root \
-	--password="$MARIADB_ROOT_PASSWORD" \
+set -a
+source ./database.env
+set +a
+
+prefix="${MARIADB_DATABASE:-postal}"
+mapfile -t databases < <(podman exec -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" mariadb-app \
+	mariadb -h 127.0.0.1 -u root -N -B \
+	-e "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '${prefix}' OR schema_name LIKE '${prefix}-server-%'")
+
+if [[ ${#databases[@]} -eq 0 ]]; then
+	echo "No Postal database to dump"
+	exit 0
+fi
+
+echo "Dumping databases: ${databases[*]}"
+podman exec -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" mariadb-app mariadb-dump \
+	-h 127.0.0.1 -u root \
+	--databases "${databases[@]}" \
 	--default-character-set=utf8mb4 \
 	--skip-dump-date \
-	--ignore-table=mysql.event \
 	--single-transaction \
 	--quick \
-	--add-drop-table >postal.sql
+	--routines \
+	--add-drop-table >postal.sql.tmp
+mv -f postal.sql.tmp postal.sql
+chmod 0600 postal.sql

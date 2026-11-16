@@ -5,31 +5,29 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-# Remove traefik route
+# Close the SMTP port, withdraw the smarthost provider key and the podman
+# secrets. ns8-traefik drops the web route on the module-removed event.
 
-import os
-import sys
 import json
+import os
+import subprocess
+import sys
 import agent
-import agent.tasks
 
-# Try to parse the stdin as JSON.
-# If parsing fails, output everything to stderr
-data = json.load(sys.stdin)
+agent.remove_public_service(os.environ['MODULE_ID'])
 
-# Find default traefik instance for current node
-default_traefik_id = agent.resolve_agent_id('traefik@node')
-if default_traefik_id is None:
-    sys.exit(2)
+try:
+    with agent.redis_connect(privileged=True) as prdb:
+        prdb.delete(os.environ['AGENT_ID'] + "/srv/tcp/submission")
+        prdb.publish(os.environ['AGENT_ID'] + "/event/submission-changed", json.dumps({
+            "module_id": os.environ['MODULE_ID'],
+            "module_uuid": os.environ.get('MODULE_UUID', ''),
+            "node_id": int(os.environ['NODE_ID']),
+        }))
+except Exception as ex:
+    print(agent.SD_WARNING + f"Cannot remove the smarthost provider key: {ex}", file=sys.stderr)
 
-# Remove traefik route
-response = agent.tasks.run(
-    agent_id=default_traefik_id,
-    action='delete-route',
-    data={
-        'instance': os.environ['MODULE_ID']
-    },
-)
-
-# Check if traefik configuration has been successfull
-agent.assert_exp(response['exit_code'] == 0)
+for container in ("postal-app", "postal-smtp-app", "postal-worker-app"):
+    for suffix in ("signing-key", "tls-cert", "tls-key"):
+        subprocess.run(["podman", "secret", "rm", f"{container}-{suffix}"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

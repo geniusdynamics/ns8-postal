@@ -1,0 +1,26 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+#
+# Restart the postal pod and every container, by name. The Postal schema
+# is created or migrated (postal-db-init) once MariaDB answers and before
+# the Postal processes are waited for: they wait for the migrations.
+#
+# Usage: postal-restart [--if-active]
+#
+
+set -e
+exec 1>&2
+
+if [[ "$1" == "--if-active" ]] && ! systemctl --user -q is-active postal.service; then
+    echo "postal.service is not running: not restarted"
+    exit 0
+fi
+
+systemctl --user restart postal.service mariadb-app.service
+postal-db-init
+systemctl --user start postal-app.service postal-smtp-app.service postal-worker-app.service

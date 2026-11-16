@@ -6,10 +6,12 @@
 #
 
 #
-# Create the Postal database schema on a new instance. "postal initialize"
-# loads the schema and would replace the tables of a database in use: run it
+# Create or migrate the Postal database schema, with a one-shot Postal
+# container in the pod, while mariadb-app runs. "postal initialize" loads
+# the schema and would replace the tables of a database in use: run it
 # only while the postal database has no tables. Existing instances keep
-# their data; their schema migrations run with "postal upgrade".
+# their data; their schema migrations run with "postal upgrade". Postal
+# processes started meanwhile wait for the migrations (migration_waiter).
 #
 
 set -e
@@ -21,25 +23,26 @@ set +a
 
 # Wait for MariaDB to answer (up to 2 minutes)
 for _ in $(seq 1 60); do
-    if podman exec mariadb-app mariadb-admin ping -h 127.0.0.1 -u root -p"${MARIADB_ROOT_PASSWORD}" --silent 2>/dev/null; then
+    if podman exec -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" mariadb-app mariadb-admin ping -h 127.0.0.1 -u root --silent 2>/dev/null; then
         break
     fi
     sleep 2
 done
 
-tables=$(podman exec mariadb-app mariadb -h 127.0.0.1 -u root -p"${MARIADB_ROOT_PASSWORD}" -N -B \
+tables=$(podman exec -e MYSQL_PWD="${MARIADB_ROOT_PASSWORD}" mariadb-app mariadb -h 127.0.0.1 -u root -N -B \
     -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${MARIADB_DATABASE:-postal}'")
-
-# Wait for the Postal web container, which runs the commands below
-for _ in $(seq 1 60); do
-    podman container exists postal-app && [[ "$(podman inspect -f '{{.State.Running}}' postal-app)" == true ]] && break
-    sleep 2
-done
 
 if [[ "${tables}" == 0 ]]; then
     echo "Empty postal database: creating the Postal schema"
-    podman exec postal-app postal initialize
+    command=initialize
 else
     echo "The postal database has ${tables} tables: running the Postal migrations"
-    podman exec postal-app postal upgrade
+    command=upgrade
 fi
+
+exec podman run --rm --name postal-db-init --replace \
+    --pod postal \
+    --volume ./postal.yml:/config/postal.yml:z \
+    --env-file postal.env \
+    --env MIGRATION_WAITER_ENABLED=false \
+    "${POSTAL_IMAGE}" postal "${command}"

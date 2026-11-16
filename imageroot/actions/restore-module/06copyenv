@@ -5,19 +5,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
+# The settings are in state/settings.json, restored by restic in the
+# inherited 10restore step. Copy the non-secret variables the units and an
+# older backup without settings.json need.
+
 import sys
 import json
 import agent
 
 request = json.load(sys.stdin)
-
 original_environment = request['environment']
 
-for evar in [
-        "TRAEFIK_HOST",
-        "TRAEFIK_HTTP2HTTPS",
-        "TRAEFIK_LETS_ENCRYPT",
-    ]:
-    agent.set_env(evar, original_environment[evar])
-
-agent.dump_env()
+for evar in ["TRAEFIK_HOST", "TRAEFIK_HTTP2HTTPS", "TRAEFIK_LETS_ENCRYPT", "POSTAL_SMTP_PORT"]:
+    if evar in original_environment:
+        agent.set_env(evar, original_environment[evar])

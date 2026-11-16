@@ -6,9 +6,9 @@
 #
 
 set -e
+exec 1>&2
 
-# bootstrap postal app
-# postal bootstrap "${APP_URL}"
 # Same safe initialization as configure-module: never reload the schema of
-# a database in use
+# a database in use, run the migrations otherwise
 postal-db-init
+systemctl --user try-restart postal-app.service postal-smtp-app.service postal-worker-app.service

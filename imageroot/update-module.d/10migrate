@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+#
+# Move an install of an older release to the current layout, keeping every
+# value (settings, Rails secret key, signing key, credentials of the
+# e-mails of Postal): settings.json, secrets/ (0600), postal.yml without
+# secrets, postal.env (0600). The old release ran Rails in the "test"
+# environment (no CSRF protection, no e-mails sent): postal.yml now sets
+# "production". Caddy, unused, is removed. 20restart applies the result.
+#
+
+import os
+import subprocess
+import sys
+import agent
+import postal_ns8 as postal
+
+postal.migrate_legacy()
+
+if not os.path.exists(postal.SETTINGS_FILE):
+    sys.exit(0)  # not configured yet
+
+settings = postal.coerce(postal.load_settings())
+postal.save_settings(settings)
+agent.set_env("POSTAL_SMTP_PORT", settings["smtp_port"])
+agent.set_env("POSTAL_SMTP_HOSTNAME", postal.smtp_hostname(settings))
+
+if settings["smtp_tls"]:
+    try:
+        postal.fetch_certificate(postal.smtp_hostname(settings))
+        postal.write_file(".tls-hostname", postal.smtp_hostname(settings) + "\n")
+    except Exception as ex:
+        print(agent.SD_WARNING + f"Cannot get the SMTP certificate: {ex}", file=sys.stderr)
+
+postal.render(settings)
+
+# The SMTP port was never opened in the firewall by older releases
+try:
+    if not agent.add_public_service(os.environ['MODULE_ID'], [f"{settings['smtp_port']}/tcp"], replace_ports=True):
+        print(agent.SD_WARNING + "add-public-service failed: run configure-module", file=sys.stderr)
+except Exception as ex:
+    print(agent.SD_WARNING + f"add-public-service failed: {ex}", file=sys.stderr)
+
+# Caddy, unused since Traefik reaches Postal directly
+subprocess.run(["systemctl", "--user", "stop", "caddy-app.service"], stderr=subprocess.DEVNULL)
+subprocess.run(["podman", "rm", "--force", "--ignore", "caddy-app"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

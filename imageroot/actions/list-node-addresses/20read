@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Genius Dynamics
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# The global addresses of the node interfaces, for the IP pools of Postal.
+# Read-only (the builtin reader role runs list-* actions): no secrets.
+
+import json
+import sys
+import postal_ns8 as postal
+
+json.dump({"addresses": postal.node_addresses()}, fp=sys.stdout)

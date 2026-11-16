@@ -5,68 +5,52 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-#
-# Read configuration
-#
+# Return every setting, without secrets: the write-only secrets are
+# reported as *_set booleans. Also the values the UI shows: the OIDC
+# redirect URI, the DNS records, the cluster smarthost and network.
 
+import json
 import os
 import sys
-import json
 import agent
+import postal_ns8 as postal
 
-# Prepare return variable
-config = {}
+settings = postal.coerce(postal.load_settings())
+sec = postal.read_secrets()
+config = postal.configure_payload(settings, settings["lets_encrypt"])
 
-# Read current configuration from the environment file
-config["host"] = os.getenv("TRAEFIK_HOST", "")
-config["http2https"] = os.getenv("TRAEFIK_HTTP2HTTPS") == "True"
-config["lets_encrypt"] = os.getenv("TRAEFIK_LETS_ENCRYPT") == "True"
+for field, var in postal.SECRET_FIELDS.items():
+    config[field + "_set"] = bool(sec.get(var))
 
-# Dump the configuration to stdout
-# json.dump(config, fp=sys.stdout)
-if os.path.exists("postal.env"):
-    data = agent.read_envfile("postal.env")
-    config["WAIT_FOR_TIMEOUT"] = data.get("WAIT_FOR_TIMEOUT", "90")
-    config["POSTAL_SIGNING_KEY_PATH"] = data.get(
-        "POSTAL_SIGNING_KEY_PATH", "/config/signing.key"
-    )
-    config["RAILS_LOG_ENABLED"] = data.get("RAILS_LOG_ENABLED", "false")
-    config["WAIT_FOR_TARGETS"] = data.get("WAIT_FOR_TARGETS", "mariadb:3306")
-    config["MAIN_DB_HOST"] = data.get("MAIN_DB_HOST", "mariadb")
-    config["MAIN_DB_USERNAME"] = data.get("MAIN_DB_USERNAME", "root")
-    config["MESSAGE_DB_HOST"] = data.get("MESSAGE_DB_HOST", "mariadb")
-    config["MESSAGE_DB_USERNAME"] = data.get("MESSAGE_DB_USERNAME", "root")
-    config["LOGGING_ENABLED"] = data.get("LOGGING_ENABLED", "false")
-    config["RAILS_ENVIRONMENT"] = data.get("RAILS_ENVIRONMENT", "test")
-    config["username"] = data.get("USERNAME", "user")
-    config["password"] = data.get("PASSWORD", "pass")
-    config["from_name"] = data.get("FROMNAME", "Postal")
-    config["from_address"] = data.get("FROMADDRESS", "postal@localhost")
-else:
-    config["WAIT_FOR_TIMEOUT"] = "90"
-    config["POSTAL_SIGNING_KEY_PATH"] = "/config/signing.key"
-    config["RAILS_LOG_ENABLED"] = "false"
-    config["WAIT_FOR_TARGETS"] = "mariadb:3306"
-    config["MAIN_DB_HOST"] = "mariadb"
-    config["MAIN_DB_USERNAME"] = "root"
-    config["MESSAGE_DB_HOST"] = "mariadb"
-    config["MESSAGE_DB_USERNAME"] = "root"
-    config["LOGGING_ENABLED"] = "false"
-    config["RAILS_ENVIRONMENT"] = "test"
-
-
-if os.path.exists("mariadb.env"):
-    data = agent.read_envfile("mariadb.env")
-    config["MARIADB_ALLOW_EMPTY_PASSWORD"] = data.get(
-        "MARIADB_ALLOW_EMPTY_PASSWORD", "yes"
-    )
-    config["MARIADB_ALLOW_EMPTY_ROOT_PASSWORD"] = data.get(
-        "MARIADB_ALLOW_EMPTY_ROOT_PASSWORD", "yes"
-    )
-    config["MARIADB_DATABASE"] = data.get("MARIADB_DATABASE", "postal")
-else:
-    config["MARIADB_DATABASE"] = "postal"
-    config["MARIADB_ALLOW_EMPTY_PASSWORD"] = "yes"
-    config["MARIADB_ALLOW_EMPTY_ROOT_PASSWORD"] = "yes"
+dns = postal.dns_names(settings)
+network, node_address = postal.cluster_info()
+sh = postal.smarthost()
+config.update({
+    "configured": os.path.exists(postal.SETTINGS_FILE),
+    "smtp_hostname_effective": postal.smtp_hostname(settings),
+    "oidc_redirect_uri": postal.oidc_redirect_uri(settings),
+    "dns": {
+        "mx_records": dns["mx_records"],
+        "spf_include": dns["spf_include"],
+        "return_path_domain": dns["return_path_domain"],
+        "route_domain": dns["route_domain"],
+        "track_domain": dns["track_domain"],
+        "web_host": settings["host"],
+    },
+    "cluster_network": network,
+    "node_address": node_address,
+    "cluster_smarthost": {
+        "enabled": bool(sh["enabled"] and sh["host"]),
+        "host": sh["host"],
+        "port": int(sh["port"] or 0),
+        "authenticated": bool(sh["username"]),
+        "encrypt_smtp": sh["encrypt_smtp"],
+    },
+})
+try:
+    with open(".configure-warnings.json") as fp:
+        config["warnings"] = json.load(fp)
+except (FileNotFoundError, ValueError):
+    config["warnings"] = []
 
 json.dump(config, fp=sys.stdout)

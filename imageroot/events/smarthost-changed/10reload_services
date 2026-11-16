@@ -1,10 +1,28 @@
-#!/bin/bash
+#!/usr/bin/env python3
 
 #
 # Copyright (C) 2023 Nethesis S.r.l.
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-set -e
+# The cluster smarthost changed: render the configuration again if Postal
+# uses it (e-mails of Postal itself, or relay of the outgoing mail) and
+# restart the Postal processes that read it
 
-systemctl --user try-reload-or-restart postal.service
+import agent
+import os
+import postal_ns8 as postal
+
+if not os.path.exists(postal.SETTINGS_FILE):
+    raise SystemExit(0)
+
+settings = postal.load_settings()
+if not postal.depends_on_smarthost(settings):
+    raise SystemExit(0)
+
+changed, warnings = postal.render(settings)
+for warning in warnings:
+    postal.log(f"smarthost-changed warning: {warning}")
+if changed:
+    agent.run_helper('systemctl', '--user', '-T', 'try-restart',
+                     'postal-app.service', 'postal-smtp-app.service', 'postal-worker-app.service')
