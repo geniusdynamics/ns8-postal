@@ -173,12 +173,24 @@ the TLS certificate paths and `migration_waiter`.
   listed in the NS8 Email notifications settings. NS8 sends to port 25
   without authentication, so it requires `smtp_port: 25` and an "SMTP-IP"
   credential for the cluster network in a Postal mail server.
-- **OIDC**: register `https://<host>/auth/oidc/callback` as redirect URI in
-  the provider. The Settings page offers the Keycloak, authentik and ZITADEL
-  modules of the cluster as presets: complete the issuer with the realm or
-  application. With discovery, Postal must reach the issuer over HTTPS with
-  a trusted certificate. Local logins can be disabled only while OIDC is
-  enabled.
+- **OIDC**: in Settings, enable OpenID Connect and choose which provider
+  Postal uses. Postal supports one active provider per instance.
+  - Select a published NS8 provider (LemonLDAP::NG, Keycloak, or NethServer
+    IdP) and its user domain. Postal binds the domain and registers its own
+    client. The provider must have NS8 SSO enabled. For LemonLDAP::NG, choose
+    the user domain served by that instance. The issuer must be reachable from
+    Postal over HTTPS with a trusted certificate.
+  - Choose manual setup to enter an issuer, client ID, and secret. Register
+    `https://<host>/auth/oidc/callback` with the provider. The Keycloak,
+    authentik and ZITADEL presets are also available when the installed
+    instance has no published NS8 OIDC service.
+  - Create the Postal user first. Postal links an unlinked account by its email
+    address and clears its local password on the first successful OIDC sign-in.
+    Keep a separate local administrator account for recovery. Accounts linked
+    to a different issuer need to be relinked before the switch. Disable OIDC
+    or select manual setup to release the Postal instance's NS8 domain binding.
+    When changing NS8 providers within the same domain, remove the unused client
+    in the old provider's administration console if you want to revoke it.
 - **SMTP port**: port 25 and the other mail ports cannot be shared with the
   Mail, mailcow or KumoMTA modules of the same node; configure-module
   refuses a port they use.

@@ -5,13 +5,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-# The OpenID Connect providers among the NS8 modules of the cluster
-# (Keycloak, authentik, ZITADEL), with an issuer URL hint, for the presets
-# of the OIDC settings. Read-only: no secrets.
+# NS8 OIDC discovery, manual issuer presets, and the available user domains.
 
 import json
 import sys
 import agent
+from agent.ldapproxy import Ldapproxy
 import postal_ns8 as postal
 
 try:
@@ -19,4 +18,9 @@ try:
 except Exception as ex:
     print(agent.SD_WARNING + f"Cannot list the OIDC providers: {ex}", file=sys.stderr)
     providers = []
-json.dump({"providers": providers}, fp=sys.stdout)
+try:
+    domains = sorted(Ldapproxy().get_domains_list())
+except Exception as ex:
+    print(agent.SD_WARNING + f"Cannot list NS8 user domains: {ex}", file=sys.stderr)
+    domains = []
+json.dump({"providers": providers, "domains": domains}, fp=sys.stdout)

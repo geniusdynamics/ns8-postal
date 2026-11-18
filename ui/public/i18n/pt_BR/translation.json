@@ -30,6 +30,25 @@
         "cannot_create_task": "Cannot create task {action}"
     },
     "settings": {
+        "oidc_provider": "Provedor",
+        "oidc_choose_provider": "Escolha um provedor",
+        "oidc_provider_helper": "Selecione um provedor NS8 para o registro automático ou use a configuração manual.",
+        "oidc_manual": "Configuração manual",
+        "oidc_manual_preset": "{name} (modelo manual)",
+        "oidc_configured_provider_missing": "{name} (indisponível)",
+        "oidc_domain": "Domínio de usuários",
+        "oidc_choose_domain": "Escolha um domínio de usuários",
+        "oidc_domain_helper": "Selecione o domínio de usuários NS8 cujos usuários entrarão no Postal.",
+        "oidc_no_domains": "Não há domínios de usuários disponíveis para este provedor.",
+        "oidc_configured_domain_missing": "{domain} (indisponível)",
+        "oidc_account_linking": "Vinculação de contas",
+        "oidc_account_linking_warning": "No primeiro login com SSO, o Postal vincula a conta pelo e-mail e limpa sua senha. Mantenha um administrador local separado para recuperação. As contas vinculadas a outro emissor precisam ser vinculadas novamente.",
+        "oidc_provider_unavailable": "O provedor NS8 selecionado está indisponível. Escolha outro provedor ou use a configuração manual.",
+        "oidc_domain_unavailable": "O domínio de usuários NS8 selecionado está indisponível.",
+        "oidc_domain_not_served": "Escolha um domínio de usuários atendido pelo provedor selecionado.",
+        "oidc_registration_failed": "Falha no registro do cliente. Verifique se o provedor está em execução e tente novamente.",
+        "oidc_issuer_changed": "A URL do emissor do provedor mudou. Verifique as configurações do provedor antes de mudar de emissor.",
+        "oidc_https_required": "Ative a opção de forçar HTTPS para usar um provedor NS8.",
         "title": "Settings"
     }
 }

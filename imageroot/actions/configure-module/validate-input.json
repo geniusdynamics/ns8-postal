@@ -175,6 +175,14 @@
         "from_address": {
             "type": "string"
         },
+        "oidc_provider": {
+            "type": "string",
+            "description": "Selected NS8 OIDC provider module UUID, or empty for manual setup"
+        },
+        "oidc_domain": {
+            "type": "string",
+            "description": "NS8 user domain used for automatic client registration"
+        },
         "oidc_enabled": {
             "type": "boolean"
         },

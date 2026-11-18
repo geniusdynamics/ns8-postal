@@ -592,10 +592,49 @@
                     }}</template>
                   </NsToggle>
                   <template v-if="form.oidc_enabled">
+                    <NsComboBox
+                      :key="'provider-' + loadingOidcProviders"
+                      :title="$t('settings.oidc_provider')"
+                      :label="$t('settings.oidc_choose_provider')"
+                      :helper-text="$t('settings.oidc_provider_helper')"
+                      v-model="oidcProviderChoice"
+                      :options="oidcProviderOptions"
+                      :auto-filter="false"
+                      :auto-highlight="true"
+                      :invalid-message="error.oidc_provider"
+                      :disabled="busy"
+                      ref="oidc_provider"
+                      @change="selectOidcProvider"
+                      class="mg-bottom maxwidth"
+                    />
+                    <template v-if="form.oidc_provider">
+                      <NsComboBox
+                        :key="'domain-' + loadingOidcProviders"
+                        :title="$t('settings.oidc_domain')"
+                        :label="$t('settings.oidc_choose_domain')"
+                        :helper-text="$t('settings.oidc_domain_helper')"
+                        v-model="form.oidc_domain"
+                        :options="oidcDomainOptions"
+                        :auto-filter="false"
+                        :auto-highlight="true"
+                        :invalid-message="error.oidc_domain"
+                        :disabled="busy"
+                        ref="oidc_domain"
+                        class="mg-bottom maxwidth"
+                      />
+                      <p
+                        v-if="
+                          !loadingOidcProviders && !oidcDomainOptions.length
+                        "
+                        class="mg-bottom"
+                      >
+                        {{ $t("settings.oidc_no_domains") }}
+                      </p>
+                    </template>
                     <h5 class="mg-bottom-sm">
                       {{ $t("settings.oidc_redirect_uri") }}
                     </h5>
-                    <p class="mg-bottom-sm">
+                    <p v-if="!form.oidc_provider" class="mg-bottom-sm">
                       {{ $t("settings.oidc_redirect_uri_description") }}
                     </p>
                     <NsCodeSnippet
@@ -607,107 +646,105 @@
                       class="mg-bottom"
                       >{{ oidcRedirectUri }}</NsCodeSnippet
                     >
-                    <NsComboBox
-                      v-if="oidcProviderOptions.length"
-                      :title="$t('settings.oidc_preset')"
-                      :label="$t('settings.oidc_preset_placeholder')"
-                      :helper-text="$t('settings.oidc_preset_helper')"
-                      v-model="oidcPreset"
-                      :options="oidcProviderOptions"
-                      :auto-filter="false"
-                      :auto-highlight="true"
-                      :disabled="busy"
-                      @change="applyOidcPreset"
-                      class="mg-bottom maxwidth"
-                    />
-                    <NsTextInput
-                      :label="$t('settings.oidc_name')"
-                      v-model.trim="form.oidc_name"
-                      :helper-text="$t('settings.oidc_name_helper')"
-                      :invalid-message="error.oidc_name"
-                      :disabled="busy"
-                      ref="oidc_name"
-                      class="mg-bottom maxwidth"
-                    />
-                    <NsTextInput
-                      :label="$t('settings.oidc_issuer')"
-                      v-model.trim="form.oidc_issuer"
-                      placeholder="https://sso.example.org/realms/main"
-                      :invalid-message="error.oidc_issuer"
-                      :disabled="busy"
-                      ref="oidc_issuer"
-                      class="mg-bottom maxwidth"
-                    />
-                    <NsTextInput
-                      :label="$t('settings.oidc_identifier')"
-                      v-model.trim="form.oidc_identifier"
-                      :invalid-message="error.oidc_identifier"
-                      :disabled="busy"
-                      ref="oidc_identifier"
-                      class="mg-bottom maxwidth"
-                    />
-                    <NsTextInput
-                      type="password"
-                      autocomplete="new-password"
-                      :label="$t('settings.oidc_secret')"
-                      v-model="secrets.oidc_secret"
-                      :placeholder="
-                        secretsSet.oidc_secret ? $t('settings.unchanged') : ''
-                      "
-                      :invalid-message="error.oidc_secret"
-                      :disabled="busy"
-                      ref="oidc_secret"
-                      class="mg-bottom maxwidth"
-                    />
-                    <NsTextInput
-                      :label="$t('settings.oidc_scopes')"
-                      v-model="oidcScopes"
-                      :helper-text="$t('settings.oidc_scopes_helper')"
-                      :invalid-message="error.oidc_scopes"
-                      :disabled="busy"
-                      ref="oidc_scopes"
-                      class="mg-bottom maxwidth"
-                    />
-                    <NsTextInput
-                      v-for="key in oidcFieldKeys"
-                      :key="key"
-                      :label="$t('settings.' + key)"
-                      v-model.trim="form[key]"
-                      :invalid-message="error[key]"
-                      :disabled="busy"
-                      :ref="key"
-                      class="mg-bottom maxwidth"
-                    />
-                    <NsToggle
-                      value="oidcDiscovery"
-                      :label="$t('settings.oidc_discovery')"
-                      v-model="form.oidc_discovery"
-                      :disabled="busy"
-                      class="mg-bottom"
-                    >
-                      <template #tooltip>{{
-                        $t("settings.oidc_discovery_tooltip")
-                      }}</template>
-                      <template slot="text-left">{{
-                        $t("settings.disabled")
-                      }}</template>
-                      <template slot="text-right">{{
-                        $t("settings.enabled")
-                      }}</template>
-                    </NsToggle>
-                    <template v-if="!form.oidc_discovery">
+                    <template v-if="!form.oidc_provider">
                       <NsTextInput
-                        v-for="key in oidcEndpointKeys"
+                        :label="$t('settings.oidc_name')"
+                        v-model.trim="form.oidc_name"
+                        :helper-text="$t('settings.oidc_name_helper')"
+                        :invalid-message="error.oidc_name"
+                        :disabled="busy"
+                        ref="oidc_name"
+                        class="mg-bottom maxwidth"
+                      />
+                      <NsTextInput
+                        :label="$t('settings.oidc_issuer')"
+                        v-model.trim="form.oidc_issuer"
+                        placeholder="https://sso.example.org/realms/main"
+                        :invalid-message="error.oidc_issuer"
+                        :disabled="busy"
+                        ref="oidc_issuer"
+                        class="mg-bottom maxwidth"
+                      />
+                      <NsTextInput
+                        :label="$t('settings.oidc_identifier')"
+                        v-model.trim="form.oidc_identifier"
+                        :invalid-message="error.oidc_identifier"
+                        :disabled="busy"
+                        ref="oidc_identifier"
+                        class="mg-bottom maxwidth"
+                      />
+                      <NsTextInput
+                        type="password"
+                        autocomplete="new-password"
+                        :label="$t('settings.oidc_secret')"
+                        v-model="secrets.oidc_secret"
+                        :placeholder="
+                          secretsSet.oidc_secret && !savedOidcProvider
+                            ? $t('settings.unchanged')
+                            : ''
+                        "
+                        :invalid-message="error.oidc_secret"
+                        :disabled="busy"
+                        ref="oidc_secret"
+                        class="mg-bottom maxwidth"
+                      />
+                      <NsTextInput
+                        :label="$t('settings.oidc_scopes')"
+                        v-model="oidcScopes"
+                        :helper-text="$t('settings.oidc_scopes_helper')"
+                        :invalid-message="error.oidc_scopes"
+                        :disabled="busy"
+                        ref="oidc_scopes"
+                        class="mg-bottom maxwidth"
+                      />
+                      <NsTextInput
+                        v-for="key in oidcFieldKeys"
                         :key="key"
                         :label="$t('settings.' + key)"
                         v-model.trim="form[key]"
-                        placeholder="https://"
                         :invalid-message="error[key]"
                         :disabled="busy"
                         :ref="key"
                         class="mg-bottom maxwidth"
                       />
+                      <NsToggle
+                        value="oidcDiscovery"
+                        :label="$t('settings.oidc_discovery')"
+                        v-model="form.oidc_discovery"
+                        :disabled="busy"
+                        class="mg-bottom"
+                      >
+                        <template #tooltip>{{
+                          $t("settings.oidc_discovery_tooltip")
+                        }}</template>
+                        <template slot="text-left">{{
+                          $t("settings.disabled")
+                        }}</template>
+                        <template slot="text-right">{{
+                          $t("settings.enabled")
+                        }}</template>
+                      </NsToggle>
+                      <template v-if="!form.oidc_discovery">
+                        <NsTextInput
+                          v-for="key in oidcEndpointKeys"
+                          :key="key"
+                          :label="$t('settings.' + key)"
+                          v-model.trim="form[key]"
+                          placeholder="https://"
+                          :invalid-message="error[key]"
+                          :disabled="busy"
+                          :ref="key"
+                          class="mg-bottom maxwidth"
+                        />
+                      </template>
                     </template>
+                    <NsInlineNotification
+                      kind="warning"
+                      :title="$t('settings.oidc_account_linking')"
+                      :description="$t('settings.oidc_account_linking_warning')"
+                      :showCloseButton="false"
+                      class="mg-bottom"
+                    />
                   </template>
                   <NsToggle
                     value="localAuth"
@@ -1042,6 +1079,7 @@ import {
 } from "@nethserver/ns8-ui-lib";
 
 const SECRET_FIELDS = ["oidc_secret", "app_smtp_password", "rspamd_password"];
+const MANUAL_OIDC_CHOICE = "manual";
 
 export default {
   name: "Settings",
@@ -1066,6 +1104,8 @@ export default {
         lets_encrypt: false,
         http2https: true,
         smtp_relays: [],
+        oidc_provider: "",
+        oidc_domain: "",
         oidc_scopes: ["openid", "email"],
         dns_mx_records: [],
       },
@@ -1082,13 +1122,15 @@ export default {
       savedRspamdWebui: false,
       rspamdRoute: { status: "off", owner: "" },
       mxRecords: "",
-      oidcPreset: "",
+      oidcProviderChoice: MANUAL_OIDC_CHOICE,
       oidcProviders: [],
+      oidcDomains: [],
+      savedOidcProvider: "",
+      loadingOidcProviders: true,
       nodeAddresses: [],
       dns: {},
       clusterSmarthost: {},
       clusterNetwork: "",
-      oidcRedirectUri: "",
       warnings: [],
       relayKey: 0,
       deliveryFields: [
@@ -1195,12 +1237,71 @@ export default {
         label: this.$t("settings.app_smtp_tls_" + v),
       }));
     },
+    oidcRedirectUri() {
+      const host = this.form.host.trim().toLowerCase().replace(/\.+$/, "");
+      return host ? `https://${host}/auth/oidc/callback` : "";
+    },
     oidcProviderOptions() {
-      return this.oidcProviders.map((p) => ({
-        name: p.module_id,
-        value: p.module_id,
-        label: `${p.name} - ${p.ui_name || p.module_id} (${p.host})`,
+      const options = [
+        {
+          name: MANUAL_OIDC_CHOICE,
+          value: MANUAL_OIDC_CHOICE,
+          label: this.$t("settings.oidc_manual"),
+        },
+        ...this.oidcProviders.map((provider) => {
+          const value = this.oidcProviderValue(provider);
+          const label = `${provider.name} - ${
+            provider.ui_name || provider.module_id
+          } (${provider.host})`;
+          return {
+            name: value,
+            value,
+            label: provider.managed
+              ? label
+              : this.$t("settings.oidc_manual_preset", { name: label }),
+          };
+        }),
+      ];
+      if (
+        this.form.oidc_provider &&
+        !options.some((option) => option.value === this.oidcProviderChoice)
+      ) {
+        options.push({
+          name: this.oidcProviderChoice,
+          value: this.oidcProviderChoice,
+          label: this.loadingOidcProviders
+            ? this.form.oidc_name || this.form.oidc_provider
+            : this.$t("settings.oidc_configured_provider_missing", {
+                name: this.form.oidc_name || this.form.oidc_provider,
+              }),
+        });
+      }
+      return options;
+    },
+    oidcDomainOptions() {
+      const provider = this.oidcProviders.find(
+        (item) => item.managed && item.module_uuid === this.form.oidc_provider
+      );
+      const domains =
+        provider && provider.domain
+          ? this.oidcDomains.filter((domain) => domain === provider.domain)
+          : this.oidcDomains;
+      const options = domains.map((domain) => ({
+        name: domain,
+        value: domain,
+        label: domain,
       }));
+      if (this.form.oidc_domain && !domains.includes(this.form.oidc_domain)) {
+        const domain = this.form.oidc_domain;
+        options.push({
+          name: domain,
+          value: domain,
+          label: this.loadingOidcProviders
+            ? domain
+            : this.$t("settings.oidc_configured_domain_missing", { domain }),
+        });
+      }
+      return options;
     },
     clusterSmarthostText() {
       const sh = this.clusterSmarthost;
@@ -1341,7 +1442,13 @@ export default {
         ...r,
         key: this.relayKey++,
       }));
+      form.oidc_provider = form.oidc_provider || "";
+      form.oidc_domain = form.oidc_domain || "";
       this.form = form;
+      this.savedOidcProvider = form.oidc_provider;
+      this.oidcProviderChoice = form.oidc_provider
+        ? `managed:${form.oidc_provider}`
+        : MANUAL_OIDC_CHOICE;
       this.smtpPort = String(config.smtp_port);
       this.smtpPortChoices = config.smtp_port_choices || [];
       this.trackDomains = config.track_domains || [];
@@ -1359,7 +1466,6 @@ export default {
       this.dns = config.dns || {};
       this.clusterSmarthost = config.cluster_smarthost || {};
       this.clusterNetwork = config.cluster_network;
-      this.oidcRedirectUri = config.oidc_redirect_uri;
       this.warnings = config.warnings || [];
       this.loading.getConfiguration = false;
       this.focusElement("host");
@@ -1391,7 +1497,7 @@ export default {
       }
     },
     async listOidcProviders() {
-      await this.runTask(
+      const err = await this.runTask(
         "list-oidc-providers",
         undefined,
         {
@@ -1401,22 +1507,54 @@ export default {
         {
           completed: (taskContext, taskResult) => {
             this.oidcProviders = taskResult.output.providers || [];
+            this.oidcDomains = taskResult.output.domains || [];
+            this.loadingOidcProviders = false;
+          },
+          aborted: () => {
+            this.loadingOidcProviders = false;
           },
         }
       );
+      if (err) {
+        this.loadingOidcProviders = false;
+      }
     },
-    applyOidcPreset(moduleId) {
-      const provider = this.oidcProviders.find((p) => p.module_id === moduleId);
-      if (!provider) {
-        return;
+    oidcProviderValue(provider) {
+      return provider.managed
+        ? `managed:${provider.module_uuid}`
+        : `preset:${provider.module_id}`;
+    },
+    selectOidcProvider(value) {
+      this.oidcProviderChoice = value || MANUAL_OIDC_CHOICE;
+      const provider = this.oidcProviders.find(
+        (item) => this.oidcProviderValue(item) === value
+      );
+      if (provider && provider.managed) {
+        if (this.form.oidc_provider !== provider.module_uuid) {
+          this.form.oidc_domain = "";
+        }
+        this.form.oidc_provider = provider.module_uuid;
+        this.secrets.oidc_secret = "";
+      } else if (provider || !value || value === MANUAL_OIDC_CHOICE) {
+        if (this.form.oidc_provider && this.savedOidcProvider) {
+          this.form.oidc_name = "";
+          this.form.oidc_identifier = "";
+          this.form.oidc_issuer = "";
+        }
+        this.form.oidc_provider = "";
+        this.form.oidc_domain = "";
+        if (provider) {
+          this.form.oidc_name = provider.name;
+          this.form.oidc_issuer = provider.issuer;
+          this.form.oidc_discovery = true;
+          if (!this.form.oidc_identifier) {
+            this.form.oidc_identifier = "postal";
+          }
+          this.focusElement("oidc_issuer");
+        }
       }
-      this.form.oidc_name = provider.name;
-      this.form.oidc_issuer = provider.issuer;
-      this.form.oidc_discovery = true;
-      if (!this.form.oidc_identifier) {
-        this.form.oidc_identifier = "postal";
-      }
-      this.focusElement("oidc_issuer");
+      this.$set(this.error, "oidc_provider", "");
+      this.$set(this.error, "oidc_domain", "");
     },
     openRspamd() {
       window.open(`https://${this.form.host}/rspamd/`, "_blank");
@@ -1447,6 +1585,19 @@ export default {
     },
     validateConfigureModule() {
       this.clearErrors(this);
+      if (
+        this.form.oidc_enabled &&
+        this.form.oidc_provider &&
+        !this.form.oidc_domain
+      ) {
+        this.$set(
+          this.error,
+          "oidc_domain",
+          this.$t("settings.oidc_choose_domain")
+        );
+        this.focusElement("oidc_domain");
+        return false;
+      }
       if (!this.form.host) {
         this.error.host = this.$t("common.required");
         this.focusElement("host");
@@ -1498,7 +1649,10 @@ export default {
       data.oidc_scopes = this.splitList(this.oidcScopes);
       data.dns_mx_records = this.splitList(this.mxRecords);
       for (const field of SECRET_FIELDS) {
-        if (this.secrets[field]) {
+        if (
+          this.secrets[field] &&
+          (field !== "oidc_secret" || !data.oidc_provider)
+        ) {
           data[field] = this.secrets[field];
         }
       }
