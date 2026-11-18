@@ -605,6 +605,7 @@
                       :disabled="busy"
                       ref="oidc_provider"
                       @change="selectOidcProvider"
+                      @focusout.native="restoreOidcProviderDisplay"
                       class="mg-bottom maxwidth"
                     />
                     <NsInlineNotification
@@ -1568,6 +1569,17 @@ export default {
       return provider.managed
         ? `managed:${provider.module_uuid}`
         : `preset:${provider.module_id}`;
+    },
+    restoreOidcProviderDisplay(event) {
+      // Typing in the combo searches its options. Restore the selected label
+      // on blur if the administrator did not choose an option.
+      const chooser = event.currentTarget;
+      if (
+        !chooser.contains(event.relatedTarget) &&
+        chooser.querySelector("input").value !== this.oidcProviderDisplay
+      ) {
+        this.oidcProviderInputKey++;
+      }
     },
     selectOidcProvider(label) {
       const option = this.oidcProviderOptions.find(
