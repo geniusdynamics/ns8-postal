@@ -1,7 +1,10 @@
 *** Settings ***
 Library    SSHLibrary
 
+Suite Setup    Skip If    '${SCENARIO}' == 'install'
+
 *** Variables ***
+${SCENARIO}    all
 ${HOST}            postal-update.example.org
 ${OIDC_SECRET}     Upd4te-OIDC-Secr3t
 # The update scenarios start from the releases installed instances run:

@@ -3,7 +3,10 @@ Library    SSHLibrary
 Library    String
 Library    Collections
 
+Suite Setup    Skip If    '${SCENARIO}' == 'update'
+
 *** Variables ***
+${SCENARIO}    all
 ${HOST}           postal.example.org
 ${OIDC_SECRET}    T3st-OIDC-Secr3t-Value
 ${SMTP_PORT}      2525

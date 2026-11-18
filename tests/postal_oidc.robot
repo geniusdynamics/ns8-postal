@@ -2,7 +2,10 @@
 Library    SSHLibrary
 Suite Teardown    Remove OIDC fixtures
 
+Suite Setup    Skip If    '${SCENARIO}' == 'update'
+
 *** Variables ***
+${SCENARIO}    all
 ${LDAP_IMAGE}       ghcr.io/nethserver/openldap:2.8.1
 ${KEYCLOAK_IMAGE}   ghcr.io/geniusdynamics/keycloak:keycloak-ns8-sso
 ${LEMON_IMAGE}      ghcr.io/geniusdynamics/lemonldapng:lemonldapng-ns8-sso
@@ -60,13 +63,16 @@ Configure managed Postal provider
 Provision matching users
     [Arguments]    ${user}
     Run command    api-cli run module/${directory_id}/add-user --data '{"user":"${user}","display_name":"Postal User","mail":"${user}@${DOMAIN}","password":"${OIDC_PASSWORD}"}'
-    Run command    runagent -m ${postal_id} podman exec postal-app bundle exec rails runner 'User.create!(first_name: "Postal", last_name: "User", email_address: "${user}@${DOMAIN}", password: "${OIDC_PASSWORD}", admin: true)'
+    Run command    runagent -m ${postal_id} podman exec postal-app bundle exec rails runner 'User.create!(first_name: "Existing", last_name: "Account", email_address: "${user}@${DOMAIN}", password: "${OIDC_PASSWORD}", admin: true)'
 
 Login through Postal
-    [Arguments]    ${host}    ${kind}    ${user}    ${issuer_path}
+    [Arguments]    ${host}    ${kind}    ${user}    ${issuer_path}    ${managed}=${TRUE}
     Run command    runagent -m ${postal_id} podman exec postal-app ruby -rnet/http -rjson -e 'issuer = ARGV.fetch(0); uri = URI(issuer + "/.well-known/openid-configuration"); response = Net::HTTP.get_response(uri); abort "Discovery returned HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess); abort "Discovery issuer mismatch" unless JSON.parse(response.body)["issuer"] == issuer' https://${host}${issuer_path}
     Run command    python3 ${FIXTURES}/oidc_login.py ${POSTAL} ${host} ${kind} ${user} ${OIDC_PASSWORD}
     Run command    runagent -m ${postal_id} podman exec postal-app bundle exec rails runner 'u = User.find_by!(email_address: "${user}@${DOMAIN}"); abort "OIDC login not linked" unless u.oidc_uid.present? && u.oidc_issuer == "https://${host}${issuer_path}"'
+    IF    ${managed}
+        Run command    runagent -m ${postal_id} podman exec postal-app bundle exec rails runner 'u = User.find_by!(email_address: "${user}@${DOMAIN}"); abort "OIDC replaced the existing name" unless u.name == "Existing Account"'
+    END
 
 *** Test Cases ***
 Install the two NS8 providers and Postal
@@ -117,4 +123,4 @@ Sign into Postal using manually entered client credentials
     Run command    runagent -m ${keycloak_id} python3 -c 'import kcadmin, json, sys; domain, host = sys.argv[1:]; kcadmin.agent_client().post(f"/{domain}/clients", {"clientId":"postal-manual-ci","secret":"postal-manual-ci-secret","enabled":True,"protocol":"openid-connect","publicClient":False,"standardFlowEnabled":True,"redirectUris":[f"https://{host}/auth/oidc/callback"]})' ${DOMAIN} ${POSTAL}
     Run command    api-cli run module/${postal_id}/configure-module --data '{"host":"${POSTAL}","oidc_enabled":true,"oidc_provider":"","oidc_issuer":"https://${KEYCLOAK}/realms/${DOMAIN}","oidc_identifier":"postal-manual-ci","oidc_secret":"postal-manual-ci-secret","oidc_name":"Manual OIDC","oidc_discovery":true}'
     Trust the CI certificate from Postal
-    Login through Postal    ${KEYCLOAK}    keycloak    postalmanual    /realms/${DOMAIN}
+    Login through Postal    ${KEYCLOAK}    keycloak    postalmanual    /realms/${DOMAIN}    managed=${FALSE}

@@ -186,7 +186,8 @@ the TLS certificate paths and `migration_waiter`.
     instance has no published NS8 OIDC service.
   - Create the Postal user first. Postal links an unlinked account by its email
     address and clears its local password on the first successful OIDC sign-in.
-    Keep a separate local administrator account for recovery. Accounts linked
+    Managed setup keeps the name already recorded in Postal. Keep a separate
+    local administrator account for recovery. Accounts linked
     to a different issuer need to be relinked before the switch. Disable OIDC
     or select manual setup to release the Postal instance's NS8 domain binding.
     When changing NS8 providers within the same domain, remove the unused client

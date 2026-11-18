@@ -793,7 +793,10 @@ def render(settings, mark=True):
             "scopes": settings["oidc_scopes"] or ["openid", "email"],
             "uid_field": settings["oidc_uid_field"] or "sub",
             "email_address_field": settings["oidc_email_address_field"] or "email",
-            "name_field": settings["oidc_name_field"] or "name",
+            # Postal splits the chosen claim into a required first and last
+            # name. LDAP cn may contain one word. Existing Postal users
+            # already have a valid name, so keep it in managed mode.
+            "name_field": "" if settings["oidc_provider"] else (settings["oidc_name_field"] or "name"),
             "discovery": settings["oidc_discovery"],
         },
     }
