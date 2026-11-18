@@ -68,7 +68,7 @@ def login(postal, provider, kind, username, password):
     status, _, page = call(f"https://{postal}/login")
     assert status == 200 and page.csrf, "Postal login form"
     status, location, _ = call(f"https://{postal}/auth/oidc", {"authenticity_token": page.csrf})
-    assert status in (302, 303) and urlsplit(location).netloc == provider, f"Postal OIDC start HTTP {status}"
+    assert status in (302, 303) and urlsplit(location).netloc == provider, f"Postal OIDC start HTTP {status} to {urlsplit(location).netloc}{urlsplit(location).path}"
 
     if kind == "lemonldapng":
         status, location, _ = call(location + "&confirm=1")
@@ -86,7 +86,7 @@ def login(postal, provider, kind, username, password):
     callback = urlsplit(location)
     assert status in (302, 303) and callback.netloc == postal and callback.path == "/auth/oidc/callback", f"Provider authorization HTTP {status}"
     status, location, _ = call(location)
-    assert status in (302, 303) and urlsplit(location).netloc == postal and urlsplit(location).path != "/login", f"Postal callback HTTP {status}"
+    assert status in (302, 303) and urlsplit(location).netloc == postal and urlsplit(location).path != "/login", f"Postal callback HTTP {status} to {urlsplit(location).path}"
     status, location, _ = call(location)
     assert status == 200 or (status in (302, 303) and urlsplit(location).path != "/login"), f"Postal session HTTP {status}"
 

@@ -38,6 +38,9 @@ Remove OIDC fixtures
         END
     END
 
+Trust the fixture CA on the test node
+    Run command    if command -v update-ca-trust >/dev/null; then install -m 644 ${FIXTURES}/ca.crt /etc/pki/ca-trust/source/anchors/postal-oidc-ci.crt && update-ca-trust extract; else install -m 644 ${FIXTURES}/ca.crt /usr/local/share/ca-certificates/postal-oidc-ci.crt && update-ca-certificates >/dev/null; fi
+
 Trust the CI certificate from Postal
     Run command    runagent -m ${postal_id} podman exec -i --user 0 postal-app sh -c 'cat > /usr/local/share/ca-certificates/postal-oidc-ci.crt && update-ca-certificates >/dev/null' < ${FIXTURES}/ca.crt
     Run command    ip=$(redis-cli --no-auth-warning hget node/1/vpn ip_address) && test -n "$ip" && printf '%s %s %s\n' "$ip" "${KEYCLOAK}" "${LEMON_PORTAL}" | runagent -m ${postal_id} podman exec -i --user 0 postal-app sh -c 'cat >> /etc/hosts'
@@ -61,6 +64,7 @@ Provision matching users
 
 Login through Postal
     [Arguments]    ${host}    ${kind}    ${user}    ${issuer_path}
+    Run command    runagent -m ${postal_id} podman exec postal-app ruby -rnet/http -rjson -e 'issuer = ARGV.fetch(0); uri = URI(issuer + "/.well-known/openid-configuration"); response = Net::HTTP.get_response(uri); abort "Discovery returned HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess); abort "Discovery issuer mismatch" unless JSON.parse(response.body)["issuer"] == issuer' https://${host}${issuer_path}
     Run command    python3 ${FIXTURES}/oidc_login.py ${POSTAL} ${host} ${kind} ${user} ${OIDC_PASSWORD}
     Run command    runagent -m ${postal_id} podman exec postal-app bundle exec rails runner 'u = User.find_by!(email_address: "${user}@${DOMAIN}"); abort "OIDC login not linked" unless u.oidc_uid.present? && u.oidc_issuer == "https://${host}${issuer_path}"'
 
@@ -85,6 +89,7 @@ Install the two NS8 providers and Postal
     Run command    api-cli run module/${postal_id}/configure-module --data '{"host":"${POSTAL}","smtp_port":2529,"http2https":true,"lets_encrypt":false}'
     Run command    cd ${FIXTURES} && openssl req -x509 -newkey rsa:2048 -nodes -subj /CN=Postal-OIDC-CI -keyout ca.key -out ca.crt -days 2 >/dev/null 2>&1
     Run command    cd ${FIXTURES} && openssl req -new -newkey rsa:2048 -nodes -subj /CN=${KEYCLOAK} -keyout tls.key -out tls.csr >/dev/null 2>&1 && printf '%s\n' 'subjectAltName=DNS:${KEYCLOAK},DNS:${LEMON_PORTAL},DNS:${POSTAL}' > tls.ext && openssl x509 -req -in tls.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out tls.crt -days 2 -extfile tls.ext
+    Trust the fixture CA on the test node
     Run command    cd ${FIXTURES} && jq -n --rawfile cert tls.crt --rawfile key tls.key '{certFile:($cert|@base64),keyFile:($key|@base64)}' | api-cli run module/traefik1/upload-certificate --data -
     Wait Until Keyword Succeeds    45s    3s    Run command    curl -fSs --cacert ${FIXTURES}/ca.crt --resolve ${KEYCLOAK}:443:127.0.0.1 https://${KEYCLOAK}/realms/master/.well-known/openid-configuration >/dev/null
 
