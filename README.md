@@ -87,7 +87,7 @@ the fields of `configure-module` and of `get-configuration`.
 | IP pools | `use_ip_pools` | `POSTAL_USE_IP_POOLS` |
 | Relays | `smtp_relays` (`[{"host", "port", "ssl_mode": "Auto/STARTTLS/TLS/None"}]`), `relay_via_cluster_smarthost`, `cluster_relay_provider` | `POSTAL_SMTP_RELAYS` |
 | E-mails of Postal | `app_smtp_mode` (`smarthost`: the NS8 cluster smarthost, or `custom`), `app_smtp_host`, `app_smtp_port`, `app_smtp_username`, `app_smtp_password` (write-only), `app_smtp_tls`, `app_smtp_tls_verify`, `from_name`, `from_address` | `smtp.*` |
-| OpenID Connect | `oidc_enabled`, `oidc_name`, `oidc_issuer`, `oidc_identifier`, `oidc_secret` (write-only), `oidc_scopes`, `oidc_uid_field`, `oidc_email_address_field`, `oidc_name_field`, `oidc_discovery`, `oidc_authorization_endpoint`, `oidc_token_endpoint`, `oidc_userinfo_endpoint`, `oidc_jwks_uri`, `oidc_local_authentication_enabled` | `OIDC_*` |
+| OpenID Connect | `oidc_enabled`, `oidc_provider` (NS8 provider UUID), `oidc_domain`, `oidc_name`, `oidc_issuer`, `oidc_identifier`, `oidc_secret` (write-only), `oidc_scopes`, `oidc_uid_field`, `oidc_email_address_field`, `oidc_name_field`, `oidc_discovery`, `oidc_authorization_endpoint`, `oidc_token_endpoint`, `oidc_userinfo_endpoint`, `oidc_jwks_uri`, `oidc_local_authentication_enabled` | `OIDC_*` |
 | Spam and virus checks | `rspamd_enabled`, `rspamd_host`, `rspamd_port`, `rspamd_ssl`, `rspamd_password` (write-only), `spamd_enabled`, `spamd_host`, `spamd_port`, `clamav_enabled`, `clamav_host`, `clamav_port` | `rspamd.*`, `spamd.*`, `clamav.*` |
 | DNS names | `dns_mx_records`, `dns_spf_include`, `dns_return_path_domain`, `dns_route_domain`, `dns_track_domain` (empty: derived from `host`) | `dns.*` |
 | Optional containers | `worker_host_network`, `rspamd_container`, `rspamd_webui`, `clamav_container` | `rspamd.*`, `clamav.*` |
@@ -173,12 +173,25 @@ the TLS certificate paths and `migration_waiter`.
   listed in the NS8 Email notifications settings. NS8 sends to port 25
   without authentication, so it requires `smtp_port: 25` and an "SMTP-IP"
   credential for the cluster network in a Postal mail server.
-- **OIDC**: register `https://<host>/auth/oidc/callback` as redirect URI in
-  the provider. The Settings page offers the Keycloak, authentik and ZITADEL
-  modules of the cluster as presets: complete the issuer with the realm or
-  application. With discovery, Postal must reach the issuer over HTTPS with
-  a trusted certificate. Local logins can be disabled only while OIDC is
-  enabled.
+- **OIDC**: in Settings, enable OpenID Connect and choose which provider
+  Postal uses. Postal supports one active provider per instance.
+  - Select a published NS8 provider (LemonLDAP::NG, Keycloak, or NethServer
+    IdP) and its user domain. Postal binds the domain and registers its own
+    client. The provider must have NS8 SSO enabled. For LemonLDAP::NG, choose
+    the user domain served by that instance. The issuer must be reachable from
+    Postal over HTTPS with a trusted certificate.
+  - Choose manual setup to enter an issuer, client ID, and secret. Register
+    `https://<host>/auth/oidc/callback` with the provider. The Keycloak,
+    authentik and ZITADEL presets are also available when the installed
+    instance has no published NS8 OIDC service.
+  - Create the Postal user first. Postal links an unlinked account by its email
+    address and clears its local password on the first successful OIDC sign-in.
+    Managed setup keeps the name already recorded in Postal. Keep a separate
+    local administrator account for recovery. Accounts linked
+    to a different issuer need to be relinked before the switch. Disable OIDC
+    or select manual setup to release the Postal instance's NS8 domain binding.
+    When changing NS8 providers within the same domain, remove the unused client
+    in the old provider's administration console if you want to revoke it.
 - **SMTP port**: port 25 and the other mail ports cannot be shared with the
   Mail, mailcow or KumoMTA modules of the same node; configure-module
   refuses a port they use.

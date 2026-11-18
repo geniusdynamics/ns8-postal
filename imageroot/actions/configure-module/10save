@@ -13,9 +13,14 @@ import json
 import sys
 import agent
 import postal_ns8 as postal
+import postal_oidc
 
 data = json.load(sys.stdin)
 current, settings, updates = postal.merge_request(data)
+try:
+    postal_oidc.apply(current, settings, updates)
+except postal_oidc.RegistrationError as error:
+    error.report()
 postal.save_settings(settings)
 if updates:
     sec = postal.read_secrets()

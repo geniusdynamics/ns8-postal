@@ -82,7 +82,10 @@ MAIL_MODULE_PORTS = {
     "mailcow": [25, 110, 143, 465, 587, 993, 995, 4190],
 }
 
-# OIDC providers among the NS8 modules (image name -> kind)
+# Modules which implement the NS8 register-client action.
+MANAGED_OIDC_MODULES = {"idp": "NethServer IdP", "keycloak": "Keycloak", "lemonldapng": "LemonLDAP::NG"}
+
+# Manual issuer presets among the NS8 modules (image name -> kind)
 OIDC_MODULES = {
     "keycloak": "keycloak",
     "goauthentik": "authentik",
@@ -130,6 +133,8 @@ DEFAULTS = {
     "from_address": "",
     # OpenID Connect
     "oidc_enabled": False,
+    "oidc_provider": "",
+    "oidc_domain": "",
     "oidc_name": "OIDC Provider",
     "oidc_issuer": "",
     "oidc_identifier": "",
@@ -498,11 +503,43 @@ def ports_taken_on_node():
     return taken
 
 
+def managed_oidc_providers(rdb):
+    """Find registered service providers whose clientadm role Postal requests."""
+    modules = modules_by_image(rdb, MANAGED_OIDC_MODULES)
+    providers = {}
+    for record in agent.list_service_providers(rdb, "oidc", "http"):
+        mid = record.get("module_id")
+        uuid = record.get("module_uuid")
+        host = record.get("host", "")
+        prefix = record.get("issuer_url_prefix", "")
+        if mid not in modules or not re.search(r"\d+$", mid) or not uuid or not HOSTNAME_RE.fullmatch(host.lower()):
+            continue
+        if not prefix.startswith(f"https://{host}/") or not prefix.endswith("/"):
+            continue
+        path = prefix.removeprefix(f"https://{host}")
+        if not re.fullmatch(r"(?:/[A-Za-z0-9_-]+)+/", path):
+            continue
+        # The source and target briefly share a UUID during a move.
+        existing = providers.get(uuid)
+        if existing and int(re.search(r"\d+$", existing["module_id"])[0]) >= int(re.search(r"\d+$", mid)[0]):
+            continue
+        providers[uuid] = {
+            "module_id": mid, "module_uuid": uuid,
+            "managed": True, "host": host, "domain": record.get("domain", ""),
+            "name": MANAGED_OIDC_MODULES[modules[mid]], "kind": modules[mid],
+            "ui_name": record.get("ui_name") or "", "issuer": prefix,
+        }
+    return providers
+
+
 def oidc_providers():
-    """OIDC-capable NS8 modules of the cluster, with an issuer hint"""
+    """Published NS8 providers and issuer hints for manual registration."""
     rdb = agent.redis_connect(use_replica=True)
-    providers = []
-    for module_id, name in sorted(modules_by_image(rdb, list(OIDC_MODULES)).items()):
+    providers = list(managed_oidc_providers(rdb).values())
+    managed_ids = {p["module_id"] for p in providers}
+    for module_id, name in sorted(modules_by_image(rdb, OIDC_MODULES).items()):
+        if module_id in managed_ids:
+            continue
         renv = rdb.hgetall(f"module/{module_id}/environment") or {}
         host = renv.get("TRAEFIK_HOST", "")
         if not host:
@@ -517,6 +554,7 @@ def oidc_providers():
         providers.append({
             "module_id": module_id,
             "kind": kind,
+            "managed": False,
             "host": host,
             "ui_name": rdb.get(f"module/{module_id}/ui_name") or "",
             "issuer": issuer,
@@ -755,7 +793,10 @@ def render(settings, mark=True):
             "scopes": settings["oidc_scopes"] or ["openid", "email"],
             "uid_field": settings["oidc_uid_field"] or "sub",
             "email_address_field": settings["oidc_email_address_field"] or "email",
-            "name_field": settings["oidc_name_field"] or "name",
+            # Postal splits the chosen claim into a required first and last
+            # name. LDAP cn may contain one word. Existing Postal users
+            # already have a valid name, so keep it in managed mode.
+            "name_field": "" if settings["oidc_provider"] else (settings["oidc_name_field"] or "name"),
             "discovery": settings["oidc_discovery"],
         },
     }
@@ -1104,12 +1145,21 @@ def validate(data, current, settings, updates):
         error("from_address", settings["from_address"], "invalid_email")
 
     # OpenID Connect
-    if settings["oidc_enabled"]:
+    if settings["oidc_enabled"] and settings["oidc_provider"]:
+        if not re.fullmatch(r"[a-zA-Z0-9-]{1,64}", settings["oidc_provider"]):
+            error("oidc_provider", "", "oidc_provider_unavailable")
+        if not HOSTNAME_RE.fullmatch(settings["oidc_domain"]):
+            error("oidc_domain", "", "oidc_domain_unavailable")
+        if not settings["http2https"]:
+            error("oidc_provider", "", "oidc_https_required")
+    elif settings["oidc_enabled"]:
         if not is_https_url(settings["oidc_issuer"]):
             error("oidc_issuer", settings["oidc_issuer"], "invalid_https_url")
         if not settings["oidc_identifier"]:
             error("oidc_identifier", "", "required")
-        if not (updates.get("OIDC_SECRET") or read_secrets().get("OIDC_SECRET")):
+        if not updates.get("OIDC_SECRET") and (
+            current["oidc_provider"] or not read_secrets().get("OIDC_SECRET")
+        ):
             error("oidc_secret", "", "required")
         if "openid" not in settings["oidc_scopes"]:
             error("oidc_scopes", ",".join(settings["oidc_scopes"]), "openid_scope_required")
