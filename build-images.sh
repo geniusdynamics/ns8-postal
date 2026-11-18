@@ -52,7 +52,7 @@ buildah add "${container}" ui/dist /ui
 # - images: Postal and MariaDB, the optional ClamAV, pinned versions
 #   tracked by Renovate, and the postal-rspamd image built below
 buildah config --entrypoint=/ \
-	--label="org.nethserver.authorizations=traefik@node:fulladm node:fwadm,portsadm" \
+	--label="org.nethserver.authorizations=traefik@node:fulladm node:fwadm,portsadm cluster:accountconsumer idp@any:clientadm keycloak@any:clientadm lemonldapng@any:clientadm" \
 	--label="org.nethserver.tcp-ports-demand=3" \
 	--label="org.nethserver.rootfull=0" \
 	--label="org.nethserver.min-core=3.0.0" \
