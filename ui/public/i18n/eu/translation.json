@@ -15,6 +15,8 @@
         "oidc_provider": "Hornitzailea",
         "oidc_choose_provider": "Aukeratu hornitzaile bat",
         "oidc_provider_helper": "Hautatu NS8 hornitzaile bat automatikoki erregistratzeko, edo erabili eskuzko konfigurazioa.",
+        "oidc_provider_lookup_failed": "Ezin izan dira NS8 hornitzaileak kargatu",
+        "oidc_provider_lookup_retry": "Kargatu berriro ezarpenak edo hautatu eskuzko konfigurazioa.",
         "oidc_manual": "Eskuzko konfigurazioa",
         "oidc_manual_preset": "{name} (eskuzko txantiloia)",
         "oidc_configured_provider_missing": "{name} (ez dago eskuragarri)",

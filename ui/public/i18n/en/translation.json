@@ -131,6 +131,8 @@
     "oidc_provider": "Provider",
     "oidc_choose_provider": "Choose a provider",
     "oidc_provider_helper": "Select an NS8 provider for automatic registration, or use manual setup.",
+    "oidc_provider_lookup_failed": "Cannot load NS8 providers",
+    "oidc_provider_lookup_retry": "Reload Settings to try again, or select Manual setup.",
     "oidc_manual": "Manual setup",
     "oidc_manual_preset": "{name} (manual preset)",
     "oidc_configured_provider_missing": "{name} (unavailable)",

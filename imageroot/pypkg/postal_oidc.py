@@ -63,6 +63,8 @@ def apply(current, settings, updates):
                 bind_domains([domain for domain in bound if domain != old_domain])
         if not settings["oidc_provider"]:
             settings["oidc_domain"] = ""
+            if current["oidc_provider"] and "OIDC_SECRET" not in updates:
+                updates["OIDC_SECRET"] = None
         return
 
     updates.pop("OIDC_SECRET", None)

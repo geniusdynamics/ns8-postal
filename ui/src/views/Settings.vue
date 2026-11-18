@@ -593,11 +593,11 @@
                   </NsToggle>
                   <template v-if="form.oidc_enabled">
                     <NsComboBox
-                      :key="'provider-' + loadingOidcProviders"
+                      :key="`provider-${oidcProviderInputKey}-${loadingOidcProviders}`"
                       :title="$t('settings.oidc_provider')"
                       :label="$t('settings.oidc_choose_provider')"
                       :helper-text="$t('settings.oidc_provider_helper')"
-                      v-model="oidcProviderChoice"
+                      :value="oidcProviderDisplay"
                       :options="oidcProviderOptions"
                       :auto-filter="false"
                       :auto-highlight="true"
@@ -607,9 +607,17 @@
                       @change="selectOidcProvider"
                       class="mg-bottom maxwidth"
                     />
+                    <NsInlineNotification
+                      v-if="oidcProviderLoadFailed"
+                      kind="warning"
+                      :title="$t('settings.oidc_provider_lookup_failed')"
+                      :description="$t('settings.oidc_provider_lookup_retry')"
+                      :showCloseButton="false"
+                      class="mg-bottom"
+                    />
                     <template v-if="form.oidc_provider">
                       <NsComboBox
-                        :key="'domain-' + loadingOidcProviders"
+                        :key="`domain-${form.oidc_provider}-${loadingOidcProviders}`"
                         :title="$t('settings.oidc_domain')"
                         :label="$t('settings.oidc_choose_domain')"
                         :helper-text="$t('settings.oidc_domain_helper')"
@@ -618,13 +626,20 @@
                         :auto-filter="false"
                         :auto-highlight="true"
                         :invalid-message="error.oidc_domain"
+                        :warn-text="
+                          oidcSelectedDomainMissing
+                            ? $t('settings.oidc_domain_unavailable')
+                            : ''
+                        "
                         :disabled="busy"
                         ref="oidc_domain"
                         class="mg-bottom maxwidth"
                       />
                       <p
                         v-if="
-                          !loadingOidcProviders && !oidcDomainOptions.length
+                          !loadingOidcProviders &&
+                          !oidcProviderLoadFailed &&
+                          !oidcDomainOptions.length
                         "
                         class="mg-bottom"
                       >
@@ -1123,10 +1138,12 @@ export default {
       rspamdRoute: { status: "off", owner: "" },
       mxRecords: "",
       oidcProviderChoice: MANUAL_OIDC_CHOICE,
+      oidcProviderInputKey: 0,
       oidcProviders: [],
       oidcDomains: [],
       savedOidcProvider: "",
       loadingOidcProviders: true,
+      oidcProviderLoadFailed: false,
       nodeAddresses: [],
       dns: {},
       clusterSmarthost: {},
@@ -1242,41 +1259,50 @@ export default {
       return host ? `https://${host}/auth/oidc/callback` : "";
     },
     oidcProviderOptions() {
+      const manualLabel = this.$t("settings.oidc_manual");
       const options = [
         {
           name: MANUAL_OIDC_CHOICE,
-          value: MANUAL_OIDC_CHOICE,
-          label: this.$t("settings.oidc_manual"),
+          value: manualLabel,
+          label: manualLabel,
         },
         ...this.oidcProviders.map((provider) => {
-          const value = this.oidcProviderValue(provider);
-          const label = `${provider.name} - ${
-            provider.ui_name || provider.module_id
-          } (${provider.host})`;
+          const instance = provider.ui_name
+            ? `${provider.ui_name} [${provider.module_id}]`
+            : provider.module_id;
+          const title = `${provider.name} - ${instance} (${provider.host})`;
+          const label = provider.managed
+            ? title
+            : this.$t("settings.oidc_manual_preset", { name: title });
           return {
-            name: value,
-            value,
-            label: provider.managed
-              ? label
-              : this.$t("settings.oidc_manual_preset", { name: label }),
+            name: this.oidcProviderKey(provider),
+            value: label,
+            label,
           };
         }),
       ];
       if (
         this.form.oidc_provider &&
-        !options.some((option) => option.value === this.oidcProviderChoice)
+        !options.some((option) => option.name === this.oidcProviderChoice)
       ) {
+        const name = this.form.oidc_name || this.form.oidc_provider;
+        const label =
+          this.loadingOidcProviders || this.oidcProviderLoadFailed
+            ? name
+            : this.$t("settings.oidc_configured_provider_missing", { name });
         options.push({
           name: this.oidcProviderChoice,
-          value: this.oidcProviderChoice,
-          label: this.loadingOidcProviders
-            ? this.form.oidc_name || this.form.oidc_provider
-            : this.$t("settings.oidc_configured_provider_missing", {
-                name: this.form.oidc_name || this.form.oidc_provider,
-              }),
+          value: label,
+          label,
         });
       }
       return options;
+    },
+    oidcProviderDisplay() {
+      const option = this.oidcProviderOptions.find(
+        (item) => item.name === this.oidcProviderChoice
+      );
+      return option ? option.label : "";
     },
     oidcDomainOptions() {
       const provider = this.oidcProviders.find(
@@ -1296,12 +1322,26 @@ export default {
         options.push({
           name: domain,
           value: domain,
-          label: this.loadingOidcProviders
-            ? domain
-            : this.$t("settings.oidc_configured_domain_missing", { domain }),
+          label:
+            this.loadingOidcProviders || this.oidcProviderLoadFailed
+              ? domain
+              : this.$t("settings.oidc_configured_domain_missing", { domain }),
         });
       }
       return options;
+    },
+    oidcSelectedDomainMissing() {
+      if (
+        this.loadingOidcProviders ||
+        this.oidcProviderLoadFailed ||
+        !this.form.oidc_domain
+      ) {
+        return false;
+      }
+      const selected = this.oidcDomainOptions.find(
+        (option) => option.value === this.form.oidc_domain
+      );
+      return selected && selected.label !== selected.value;
     },
     clusterSmarthostText() {
       const sh = this.clusterSmarthost;
@@ -1497,6 +1537,12 @@ export default {
       }
     },
     async listOidcProviders() {
+      this.loadingOidcProviders = true;
+      this.oidcProviderLoadFailed = false;
+      const failed = () => {
+        this.loadingOidcProviders = false;
+        this.oidcProviderLoadFailed = true;
+      };
       const err = await this.runTask(
         "list-oidc-providers",
         undefined,
@@ -1509,33 +1555,40 @@ export default {
             this.oidcProviders = taskResult.output.providers || [];
             this.oidcDomains = taskResult.output.domains || [];
             this.loadingOidcProviders = false;
+            this.oidcProviderLoadFailed = !!taskResult.output.discovery_failed;
           },
-          aborted: () => {
-            this.loadingOidcProviders = false;
-          },
+          aborted: failed,
         }
       );
       if (err) {
-        this.loadingOidcProviders = false;
+        failed();
       }
     },
-    oidcProviderValue(provider) {
+    oidcProviderKey(provider) {
       return provider.managed
         ? `managed:${provider.module_uuid}`
         : `preset:${provider.module_id}`;
     },
-    selectOidcProvider(value) {
-      this.oidcProviderChoice = value || MANUAL_OIDC_CHOICE;
-      const provider = this.oidcProviders.find(
-        (item) => this.oidcProviderValue(item) === value
+    selectOidcProvider(label) {
+      const option = this.oidcProviderOptions.find(
+        (item) => item.value === label
       );
+      if (!option) {
+        this.oidcProviderInputKey++;
+        this.$nextTick(() => this.focusElement("oidc_provider"));
+        return;
+      }
+      const provider = this.oidcProviders.find(
+        (item) => this.oidcProviderKey(item) === option.name
+      );
+      this.oidcProviderChoice = option.name;
       if (provider && provider.managed) {
         if (this.form.oidc_provider !== provider.module_uuid) {
           this.form.oidc_domain = "";
         }
         this.form.oidc_provider = provider.module_uuid;
         this.secrets.oidc_secret = "";
-      } else if (provider || !value || value === MANUAL_OIDC_CHOICE) {
+      } else if (provider || option.name === MANUAL_OIDC_CHOICE) {
         if (this.form.oidc_provider && this.savedOidcProvider) {
           this.form.oidc_name = "";
           this.form.oidc_identifier = "";
@@ -1646,7 +1699,21 @@ export default {
           port: Number(r.port) || 25,
           ssl_mode: r.ssl_mode || "Auto",
         }));
-      data.oidc_scopes = this.splitList(this.oidcScopes);
+      if (data.oidc_provider) {
+        for (const field of [
+          "oidc_name",
+          "oidc_issuer",
+          "oidc_identifier",
+          "oidc_scopes",
+          "oidc_discovery",
+          ...this.oidcFieldKeys,
+          ...this.oidcEndpointKeys,
+        ]) {
+          delete data[field];
+        }
+      } else {
+        data.oidc_scopes = this.splitList(this.oidcScopes);
+      }
       data.dns_mx_records = this.splitList(this.mxRecords);
       for (const field of SECRET_FIELDS) {
         if (

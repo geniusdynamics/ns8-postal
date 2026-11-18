@@ -40,7 +40,7 @@ Remove OIDC fixtures
 
 Trust the CI certificate from Postal
     Run command    runagent -m ${postal_id} podman exec -i --user 0 postal-app sh -c 'cat > /usr/local/share/ca-certificates/postal-oidc-ci.crt && update-ca-certificates >/dev/null' < ${FIXTURES}/ca.crt
-    Run command    ip=$(hostname -I | cut -d " " -f1) && printf '%s %s %s\n' "$ip" "${KEYCLOAK}" "${LEMON_PORTAL}" | runagent -m ${postal_id} podman exec -i --user 0 postal-app sh -c 'cat >> /etc/hosts'
+    Run command    ip=$(redis-cli --no-auth-warning hget node/1/vpn ip_address) && test -n "$ip" && printf '%s %s %s\n' "$ip" "${KEYCLOAK}" "${LEMON_PORTAL}" | runagent -m ${postal_id} podman exec -i --user 0 postal-app sh -c 'cat >> /etc/hosts'
 
 Configure managed Postal provider
     [Arguments]    ${id}

@@ -15,6 +15,8 @@
         "oidc_provider": "Proveedor",
         "oidc_choose_provider": "Seleccionar un proveedor",
         "oidc_provider_helper": "Seleccione un proveedor de NS8 para el registro automático o use la configuración manual.",
+        "oidc_provider_lookup_failed": "No se pudieron cargar los proveedores de NS8",
+        "oidc_provider_lookup_retry": "Vuelva a cargar los ajustes o seleccione la configuración manual.",
         "oidc_manual": "Configuración manual",
         "oidc_manual_preset": "{name} (plantilla manual)",
         "oidc_configured_provider_missing": "{name} (no disponible)",
